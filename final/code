@@ -1,0 +1,2311 @@
+
+
+
+################################################################
+# myshkin.iol
+#
+
+procedure main(args)                                            # the main() procedure
+  create_defaults()                                             # create the defaults for the global variables.
+  if *args > 0 then fin$Open( args )                            # open files on the command line.
+  execute_commands()                                            # execute all incoming commands.
+end
+
+global fin                                                      # input file
+global fout                                                     # output file
+global msg                                                      # message/error file
+global model_t                                                  # table of models
+global cur_m                                                    # current model
+global grammar_t                                                # table of grammars
+global cur_g                                                    # current grammar
+global lexicon_t                                                # table of lexicons
+global cur_l                                                    # current lexicon
+global coop_t                                                   # table of cooper-storages
+global cur_c                                                    # current cooper-storage
+global True                                                     # Boolean object "true"
+global False                                                    # Boolean object "false"
+global Nil                                                      # Boolean object "nil" ("unknown")
+global IndInd                                                   # individual indeterminate "?".
+global disp_parse_string                                        # parse-string display switch
+global disp_parse_tree                                          # parse-tree display switch
+global disp_translation                                         # translation display switch
+global preserve_type                                            # type-preserve switch
+global cur_goal                                                 # current goal for parsing
+
+procedure create_defaults()                                     # create_defaults() sets defaults for the global variables.
+  True := Boolean("true")                                       # set the objects for the evaluator.
+  False := Boolean("false")
+  Nil := Boolean("nil")
+  IndInd := new_Atom("?")
+
+  disp_parse_string := &null                                    # set the parse-string display switch "off".
+  disp_parse_tree := 1                                          # set the parse-tree display switch "on".
+  disp_translation := 1                                         # "on"
+  preserve_type := 1                                            # "on"
+
+  cur_goal := "s"                                               # make the default goal "s".
+
+  grammar_t := table()                                          # set up the grammar table, and 
+  grammar_t["default"] := grammar("default")                    # create the default grammar.
+  cur_g := grammar_t["default"]                                 # make the default grammar the current one.
+
+  lexicon_t := table()                                          # set up the lexicon table, and
+  lexicon_t["default"] := lexicon("default")                    # create the default lexicon.
+  cur_l := lexicon_t["default"]                                 # make the default lexicon the current one.
+
+  model_t := table()                                            # set up the model table, and
+  model_t["default"] := model("default")                        # create the default model.
+  cur_m := model_t["default"]                                   # make the default model the current one.
+
+
+
+
+
+
+                           - 71 -                           
+
+
+
+  coop_t := table()                                             # set up the cooper-storage table, and
+  coop_t["default"] := coop("default")                          # create the default cooper-storage.
+  cur_c := coop_t["default"]                                    # make the default cooper-storage the current one.
+  cur_c$add("s")                                                # make "s" a cooper-node. (where quants can be brought in.)
+
+  fin := director( "in" )                                       # set up the input file,
+  fout := director( "out" )                                     # the output file,
+  msg := director( "out" )                                      # and the msg/error file.
+end
+
+procedure status()                                              # procedure status shows the status of the system.
+   module_status()                                              # show the module status,
+   file_status()                                                # the file status,
+   switch_status()                                              # and the switch status.
+end
+
+procedure switch_status()                                       # procedure switch_status displays the status of the switchs.
+   msg$Write( "goal is           " || cur_goal )                # show the current goal for parsing,
+   msg$Write( "parse-string is   " ||                           # the state of the parse-string display switch,
+               if /disp_parse_string then "off" else "on" )     
+   msg$Write( "parse-tree is     " ||                           # the parse-tree switch,
+               if /disp_parse_tree then "off" else "on" )
+   msg$Write( "translation is    " ||                           # the translation switch,
+               if /disp_translation then "off" else "on" )
+   msg$Write( "preserve-type is  " ||                           # and the type-preservation switch.
+               if /preserve_type then "off" else "on" )
+end
+
+procedure execute_commands()                                    # procedure execute_commands() reads the input file 
+                                                                # until there is no more.
+  local p, p_count, argument, command, message
+  repeat
+  {
+    (line := fin$Read()) | return                               # get the next line or stop.
+    command := toke(line) |                                     # get the first word on the line as the 'command', or 
+       next                                                     # get the next line.
+    argument := trim(line[(*command)+2:0]) | ""                 # set 'argument' to be the rest of the input line.
+    case command of {                                       
+      "!": system( argument )                                   # do a shell command.
+      "echo": fout$Write( argument )                            # echo the argument to the output file.
+
+      "trace": set_trace( argument )                            # set the trace counter.
+
+      "parse-string":  disp_parse_string := set_flag( toke(argument) | "on" )    # set the parse-string display switch.
+      "parse-tree":    disp_parse_tree := set_flag( toke(argument) | "on" )      # set the parse-tree display switch.
+      "translation":   disp_translation := set_flag( toke(argument) | "on" )     # set the translation display switch.
+      "preserve-type": preserve_type := set_flag( toke(argument) | "on" )        # set the type-preservation switch.
+      "goal":          cur_goal := toke(argument)                                # set the current goal to a symbol.
+
+      "done"|"end": return                                      # stop the program.
+      "read": fin$Open( toke_list(argument) )                   # open an input file.
+      "write": fout$Open( argument )                            # open an output file.
+      "eof": fin$Close() | return                               # close the input, pop the input file stack
+      "close":                                                  # close
+        if argument == ("read"|"input")
+          then fin$Close()                                      # the input file,
+          else fout$Close()                                     # or the output file (output is default).
+
+
+
+
+
+                           - 72 -                           
+
+
+
+      "parse": every parse( argument, cur_goal )                # parse the input string. (don't translate or evaluate it.)
+      "translate": every translate( parse( argument, cur_goal ))# translate the input string (don't evaluate it.)
+
+      "new": new( argument )                                    # create a new module.
+      "select": select( argument )                              # select modules.
+      "status": status()                                        # display the system status.
+      "cooper-node": cur_c$add( argument )                      # add a cooper-node.
+      "cooper-restrict": cur_c$restrict( argument )             # add a cooper-restricted node.
+
+      "show-grammar": cur_g$show(argument)                      # show information in the current grammar.
+      "show-lexicon": cur_l$show(argument)                      # show information in the current lexicon.
+      "show-model": cur_m$show(argument)                        # show information in the current model.
+      "show-cooper": cur_c$show(argument)                       # show information in the current cooper-storage.
+      "show":                                                   # show information in all of 
+      {
+        cur_g$show(argument)                                    # the current grammar,
+        cur_l$show(argument)                                    # the current lexicon, 
+        cur_m$show(argument)                                    # the current model,
+        cur_c$show(argument)                                    # AND the current cooper-storage.
+      }
+      default:                                                  # if we don't recognize any of the above commands, 
+      {
+        if message := (                                         # try adding to 
+          cur_g$add(line) |                                     # the current grammar,
+          cur_l$add(line) |                                     # lexicon,
+          cur_m$add(line)                                       # of model.
+        )
+        then msg$Write( message )                               # if something accepted it, then display the confirmation message.
+        else                                                    # otherwise
+        {
+          p_count := 0
+          every p := parse(line, cur_goal) do                   # try to parse the input line
+          {
+            p_count +:= 1                                       # every time we get a successful parse, count it,
+            every evaluate( lisp_stree( translate( p )))        # and evaluate every translation of it.
+          }
+          if p_count = 0 then                                   # if there were no successful parses,
+            evaluate( line ) |                                  # try to evaluate it as an expression.
+              msg$Write( "not interpretable: " || line )        # otherwise say nothing can be done with the input.
+        }
+      }
+    }
+  }
+end
+
+procedure set_flag( s )                                         # procedure set_flag() returns
+  if s == "off" 
+    then return &null                                           # &null if "off",
+    else return 1                                               # 1 by default.
+end
+
+procedure set_trace( f )                                        # procedure set_trace() sets the trace counter
+    if f == ("off")
+        then &trace := 0                                        # off or
+        else &trace := -1                                       # on.
+end
+
+
+
+
+
+
+                           - 73 -                           
+
+
+
+
+################################################################	
+#   module.iol
+#
+# This file contains the code for the modules that the user can
+# manipulate.  These are the grammar, lexicon, model and
+# cooper-storage parameters modules.
+#
+# All the modules have a name field.  This is the name that they
+# were created with.
+#
+# All the modules have a "show" method.  If the "show" method is
+# called with no argument or with an empty string then everything in
+# the module is shown.  If a string is passed to a "show" method then
+# only things that are relevant to that string are shown.  
+#
+# All of the modules have an "add" method.  For the main three modules
+# success or failure is meaningful.  If the method succeeds it means
+# that the module used the string parameter as a definition and
+# created at least one new entry in the module.  For instance, the
+# grammar module tries to recognize it's parameter as a grammar rule.
+# If it can then it creates a new entry and if it can't it fails.
+# With this behavior it is easy to pass an input string to all the
+# modules and see if one recognizes it, and the input handler doesn't
+# have to know anything about the form of rules or definitions for
+# these modules.
+
+procedure select( which )
+    cur_g := \grammar_t[which]
+    cur_l := \lexicon_t[which]
+    cur_m := \model_t[which]
+    cur_c := \coop_t[which]
+end
+
+procedure new( what )                                           # procedure new() is for making new modules.
+    local kind, name
+    kind := toke_list( what )[1]                                # the first argument to the new is the kind of module to make.
+    name := toke_list( what )[2] | fail                         # the second is the name of the new module.
+    if ambiguous_match( "grammar", kind )                       # if the kind matches "grammar"
+        then cur_g := grammar_t[name] := grammar(name) & return # then make a new grammar, put it in the table, and make it current.
+    else if ambiguous_match( "lexicon", kind )                  # if the kind matches "lexicon"
+        then cur_l := lexicon_t[name] := lexicon(name) & return # then make a new one, put it in the table and make it current.
+    else if ambiguous_match( "model", kind )                    # if the kind matches "model"
+        then cur_m := model_t[name] := model(name) & return     # then make a new one, put it in the table and make it current.
+    else if ambiguous_match( "cooper-storage", kind )           # if the kind matches "cooper-storage"
+        then cur_c := coop_t[name] := coop(name) & return       # then make a new one, put it in the table and make it current.
+end
+
+procedure module_status()                                       # module_status() shows which modules are current.
+    msg$Write( "grammar is        " || cur_g$Name() )
+    msg$Write( "lexicon is        " || cur_l$Name() )
+    msg$Write( "model is          " || cur_m$Name() )
+    msg$Write( "cooper-storage is " || cur_c$Name() )
+end
+
+
+
+
+
+
+
+
+                           - 74 -                           
+
+
+
+procedure ambiguous_match( a, b )                               # ambiguous_match() checks two different length strings
+    if *a < *b                                                  # to see if the common length portion matches.
+        then { if b[1:*a+1] == a then return b }
+        else { if a[1:*b+1] == b then return a }
+    fail
+end
+
+
+####################################
+# the grammar
+#
+# The grammar uses a "rule" structure to keep the rules in.  It keeps
+# lists of these structures associated with strings. 
+#
+# The grammatical expansion part is kept in the "exp" part of the
+# structure.  The semantic translation rule is kept in the "tran"
+# part. Each of these parts is stored as a list of strings.  
+class rule( public exp, public tran )
+end
+
+class grammar( public Name, rules, public punc )
+  method add( x )
+    the_list := toke_list( x, self.punc )                       # tokenize the input string
+    if *the_list < 4 then fail                                  # if there isn't enough for lhs -> rhs => then fail.
+    if the_list[2] ~== "->" then fail                           # if the second thing isn't -> then fail.
+    every trans_pos := 1 to *the_list do                        # go through the list
+      if the_list[trans_pos] == "=>"                            # looking for the =>
+        then break
+    if trans_pos > *the_list                                    # if we went past the end of the list
+      then fail                                                 # then it is not a grammar rule.
+    if trans_pos = *the_list                                    # if there is no translation rule 
+      then put( the_list, "" )                                  # then put in a null string.
+    r := rule( the_list[3:trans_pos],                           # make a new rule structure.
+               the_list[trans_pos+1:0] )
+    /self.rules[the_list[1]] := []                              # if needed, put a list in the table by the lhs symbol.
+    put( self.rules[the_list[1]], r )                           # add this rule.
+    return "rule added"                                         # throw back an informative message.
+  end
+
+  method expansion_list( goal )
+    return \(self.rules[goal])                                  # fetch the rule expansion/right-hand side.
+  end
+
+  method show( s )                                              # show grammar information.
+    s := trim(s, ' \t')                                         # trim off white space.
+    if *s = 0 then self$show_all()                              # if a null string then show everything (show_all)
+    (r_list := \self.rules[s]) | fail                           # get the rules with 's' as the lhs.
+    every r := !r_list do                                       # iterate through the list
+    {
+      outs := s || " ->"                                        # start with lhs ->,
+      every outs ||:= " " || !r$exp()                           # put on the stuff from the expansion,
+      outs ||:= " =>"                                           # put on the =>,
+      every outs ||:= " " || !r$tran()                          # and put on the translation rule;
+      fout$Write( outs )                                        # display the rule.
+    }
+  end
+
+
+
+
+
+
+                           - 75 -                           
+
+
+
+  method show_all()
+    x := sort( self.rules )                                     # sort everything in the grammar
+    every self$show( (!x)[1] )                                  # and show all of it.
+  end
+
+initially 
+  self.rules := table()                                         # setup the table to keep the rules in.
+  self.punc := '!():;\'",.?'                                    # define punctuation marks.  should probably be user-definable.
+end
+
+####################################
+# the lexicon
+#
+# the lexicon uses word structure to keep lexical items.
+# w is the form of the word, and trans is the semantic value.
+class word( public category, public w, public trans )
+  method show()
+    fout$Write( self.category || ":  " || self.w || " " || self$trans() )  # show a word like: "category:  form translation"
+  end
+end
+
+procedure new_word( category, w, trans )
+  return word( category, w, trans )                             # make a new word 
+end
+
+################################################
+# class lexicon
+#
+# has a table by word form, and by category.  also
+# has a field for punctuation.
+#
+class lexicon ( public Name, word_t, category_t, punc )
+  method word_list( w )
+    return \(self.word_t[w])                                    # fetch the list of words with a particular form.
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 76 -                           
+
+
+
+  method add( x )
+    local category, form, value
+    x := toke_list( x, self.punc )                              # tokenize the input string.
+    category := pop(x)                                          # the first item should be the category.
+    if (pop(x) ~== ":")                                         # if the second item is not a colon
+      then fail                                                 # then fail.
+    word_list := []                                             # start a list.
+    while *x > 0 do                                             # go throught the token list
+    {
+      form := pop(x)                                            # getting word forms,
+      value := pop(x)                                           # and semantic values;
+      put( word_list, new_word( category, form, value ))        # putting each new word in the list;
+      if *x > 0 & pop(x) ~== ";"                                # if there is more to go, make sure there is a semi-colon.
+        then fail    
+    }
+    if *word_list < 1                                           # if we haven't got a single word
+      then fail                                                 # then fail.
+    /self.category_t[category] := []                            # create a new category in the category table if necessary.
+    self.category_t[category] |||:= word_list                   # put the new words in.
+    every x := !word_list do                                    # go throught the list of words
+    {
+      /self.word_t[x$w()] := []                                 # putting the form in the word form table
+      put( self.word_t[x$w()], x )                              # and putting in the word structures of what we just read.
+    }
+    return string(*word_list) || " words added"                 # throw back an informative message.
+  end
+
+  method show( s )
+    if *trim(s) = 0 then self$show_all()                        # if there is no argument then show all the lexicon.
+    show_list( \self.word_t[s] )                                # otherwise: get the words by form and show them all.
+
+    l := \self.category_t[s] | fail                             # get a list of words by category or fail
+    str := s || ": "                                            # start building a string with "category: "
+    every w := !l do                                            # every word structure in the list
+    {
+      str ||:= " " || w$w()                                     # put in the form,
+      str ||:= " " || w$trans()                                 # the translation,
+      str ||:= ";"                                              # and semi-colon.
+    }
+    fout$Write(str)                                             # display what we've built.
+  end
+
+  method show_all()
+    l := sort(self.category_t)                                  # sort all the lexicon by category.
+    every self$show( (!l)[1] )                                  # show each category.
+  end
+
+initially
+  self.word_t := table()                                        # initialize the word table
+  self.category_t := table()                                    # the category table
+  self.punc := ';:()'                                           # and the punctuation
+end
+
+procedure show_list( x )
+  every (!x)$show()                                             # show every thing in the list.
+end
+
+
+
+
+
+
+                           - 77 -                           
+
+
+
+####################################
+# the model
+#
+# A model is just a place to keep sets associated with
+# predicates, as defined in evaluator.iol.  Also it keeps a
+# collection of all the entities (atoms from types.iol) that
+# have appeared in a predicate definition.
+#
+# the domain field is a set of all the atoms.
+# the predicate field is a table by predicate name of 
+# evaluator-type Sets.
+class model ( name, domain, predicate )
+
+    method show( s )
+        if /s | s == "" then self$show_all()                    # if no argument then show all the model.
+        if t := (\(self.predicate[s]))$Image()                  # get the image of the set object
+            then fout$Write( s || "  " || t )                   # and show it with the name of the predicate.
+    end
+
+    method show_all()
+        zip := sort(self.predicate)                             # sort the predicate table.
+        every self$show( (!zip)[1] )                            # show all the predicates in the table.
+    end
+
+    method add( f )
+        line := toke_list( f, '(){}<>' )                        # tokenize the list.
+
+        if (*line = 0) |                                        # if it is empty
+           (line[1] == string(!'(){}<>')) |                     # or the first symbol is a bracket
+           (line[2] ~== "{") |                                  # or the second item is NOT a bracket
+           (line[-1] ~== "}") |                                 # or the last item is NOT a bracket
+           (not balanced( line[2:0] ))                          # of if the thing is not balanced right
+          then fail                                             # then fail.
+
+        title := convert(line[1])                               # convert the first token.
+        if title$Type() ~== "Predicate" then fail               # and if it is not a predicate then fail.
+
+        obj := convert( line[2:0] )                             # convert the rest of the input.
+        if obj$Type() ~== "Set" then fail                       # check that it is a Set.
+        self.predicate[title$Image()] := obj                    # put the set in the predicate table referenced by the predicate.
+
+        every x := obj$element() do                             # get all the atoms in the set
+          /(self.domain[x$Image()]) := x                        # and put them in the domain.
+        return "predicate added to model"                       # return an informative message.
+    end
+
+    method Eval(x)                                              # Eval() gets the value of a predicate.
+      if r := \(self.predicate[x])                              # if there is a predicate in the predicate table by this name
+        then return r                                           # then return it
+        else {                                                  # otherwise
+          err_flag := 1                                         # set the error flag
+          msg$Write( "undefined predicate: " || x )             # show an error message
+          return Nil                                            # and bomb.
+        }
+    end
+
+
+
+
+
+
+
+                           - 78 -                           
+
+
+
+    method Name()
+        return self.name
+    end
+
+    method domain()                                             # domain() is used to get all the atoms in the current model.
+      every x := !self.domain do                                # for every thing in the model
+        if /x                                                   # if it is &null
+          then next                                             # goto the next one
+          else suspend x                                        # otherwise generate it.
+    end
+    
+initially
+    self.domain := table()                                      # setup the domain table
+    self.predicate := table()                                   # and the predicate table.
+end
+
+####################################
+# cooper-storage flags
+#
+class coop( public Name, public nodes, public restricted )
+  method add( x )
+    y := toke_list(x,' \t')                                     # break the input into words.
+    every insert( self.nodes, !y )                              # add each word to the set of cooper-nodes.
+  end
+
+  method restrict( x )
+    y := toke_list(x,' \t')                                     # break the input into words.
+    every insert( self.restricted, !y )                         # add each word to the set of cooper-restricted nodes.
+  end
+
+  method show( x )
+    self$show_node(x)                                           # show cooper-nodes.
+    self$show_restricted(x)                                     # show restricted nodes.
+  end
+
+  method show_node(x)
+    s := "cooper-node "                                         # start with "cooper-node "
+    if trim(x) == "" then                                       # if no particular node is asked for
+      every s ||:= !self.nodes || " "                           # put them all in.
+    else                                                        # otherwise
+      if member(self.nodes, x)                                  # find out if the parameter is a cooper-node.
+        then s ||:= x                                           # if so, put it on the string.
+        else fail                                               # otherwise fail.
+    fout$Write( s )                                             # show the string we built.
+  end
+
+  method show_restricted(x)
+    s := "cooper-restrict "                                     # start with "cooper-restrict "
+    if trim(x) == "" then                                       # if no particular node is asked for
+      every s ||:= !self.restricted || " "                      # put them all in.
+    else                                                        # otherwise
+      if member(self.restricted, x)                             # check if the parameter is a restricted node.
+        then s ||:= x                                           # if so, put it on the string.
+        else fail                                               # otherwise fail.
+    fout$Write( s )                                             # display the string.
+  end
+
+
+
+
+
+
+                           - 79 -                           
+
+
+
+  initially
+    self.restricted := set()                                    # setup the sets for restricted
+    self.nodes := set()                                         # and cooper nodes.
+  end
+end   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 80 -                           
+
+
+
+
+################################################################
+# parser.iol
+
+class p_tree( public trans, public cat, public children )       # Declare the p_tree structure.
+  method set_trans( x )
+    self.trans := x
+  end
+end                                                             # The 'trans' part holds the translation rule.  'cat' holds the node
+                                                                # category.  'children' is a list of children.
+global p_subject, p_pos                                         # 'p_subject' will hold the list of words in the input sentence.
+                                                                # 'p_pos' holds the current position in the list.
+procedure parse( s, goal )
+  (p_subject := toke_list( \s, cur_g$punc() )) | fail           # set p_subject to have the list of words and punctuation marks from
+                                                                # the input sentence.
+  p_pos := 1                                                    # set p_pos to 1 so that we start with the first word of the
+                                                                # sentence. 
+  every t := rd_parse( goal, *p_subject ) do                    # every time the recursive descent parser generates a p_tree
+                                                                # check to make sure the current position in the list is beyond
+    if p_pos > *p_subject then                                  # the last word in the list.  i.e. make sure all the words have
+    {                                                           # been accounted for.
+      display_tree( t )                                         # go display whatever we need to about the parse tree.
+      suspend t                                                 # generate the p_tree as a result.
+    }
+end
+
+
+procedure rd_parse( goal, target_length )                       # 'rd_parse' is the main parsing procedure.  the target_length    
+								# paramter keeps track of how many words would need to be in the list 
+								# to match all the pending branches of the parse tree.  This is used  
+                                                                # to limit infinite left recursion. 
+  if target_length < 1                                          # make sure we have enough words in the list to match all the
+    then fail							# branches of the tree.  If we don't then fail.              
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 81 -                           
+
+
+
+  case type( goal ) of
+  {
+    "string":                                                   # If the goal is a string type
+    {
+      if expansion_list := cur_g$expansion_list( goal ) then    # then check the grammar for rules based on this symbol.  What
+								# we'll get back is a list of 'rule' structures.              
+        every e := !expansion_list do                           # we got a list of rules.  now we need to try each one in the
+								# list.                                                      
+          suspend p_tree(e$tran(), goal,                        # if the rd_parse call fails then this whole expression will
+                         rd_parse( e$exp(), target_length )	# fail and nothing will be generated.  Also, if it does work
+                        )					# it will be resumed until it doesn't.                      
+      suspend parse_match( goal )                               # Now check to see if we can get a lexical match with in the
+                                                                # sentence. 
+    }
+    "list":                                                     # If the goal is a list type
+      if *goal = 1 then                                         # is this list of length 1?
+        suspend [rd_parse( goal[1], target_length )]            # then we don't need to break it down.
+      else                                                      # if it's longer than 1 long then we split it into the first
+                                                                # item in the list and everything else.
+        suspend [rd_parse( goal[1], target_length-(*goal-1) )] |||    # the left side ("goal[1]")
+                 rd_parse( goal[2:0], target_length-1 )               # and the rest. ("goal[2:0]")
+    default:
+      msg$Write( "illegal parse request: " || image(goal) )
+  }
+end
+
+procedure parse_match( goal )
+  local cur_w
+
+  cur_w := p_subject[p_pos]                                     # get the word at the current position.
+  p_pos +:= 1                                                   # increment the current position.
+
+  wlist := cur_l$word_list( cur_w )                             # get the list of words that have the form of the current
+                                                                # word from the current lexicon.
+  if /wlist then                                                # if there are NO items in the lexicon with this form
+  {
+    if \cur_w == goal                                           # check to see if the current word matches what is in the
+      then suspend p_tree( "", goal, [cur_w] )			# grammatical rule and generate a p_tree if so.
+  }
+  else
+    every w := !wlist do                                        # otherwise check all the word structures in the
+      if goal == w$category() then				# word list to see if the category matches the  
+        suspend p_tree( w$trans(), goal, [cur_w] )		# goal.  Generate a p_tree when there is a match.
+
+  p_pos -:= 1                                                   # reset the current position
+end
+
+################################################################
+#  Hereafter are support routines for displays.
+
+procedure display_tree( x )                                     # display_tree checks the parse-display flags and displays whatever
+    local out_line, temp_file                                   # is necessary. 
+    
+
+
+
+
+
+
+
+
+
+                           - 82 -                           
+
+
+
+    if \disp_parse_string then                                  # check the flag to see if we should display the parse string. 
+    {
+      out_line := cb_tree( x )                                  # if so, then display it.
+      msg$Write( out_line )
+    }
+    if \disp_parse_tree then                                    # check the flag for the parse tree display.
+    {
+      out_line := cb_tree_trans( x )                            # construct the string that will be the input to chris barkers 
+								# tree program.                                                
+      temp_file := open( "x.x.x.x", "c" )                       # open a temporary file.
+      write( temp_file, ".tr " || out_line )                    # write out the string.
+      close( temp_file )                                        # close the file.
+      system( "tree <x.x.x.x >y.y.y.y" )                        # execute the tree command and put the output in a file.
+      every line := !open("y.y.y.y") do                         # now we can copy the tree to the current output stream.
+        fout$Write( line )
+      system( "rm x.x.x.x y.y.y.y" )                            # and delete the temporary files.
+    }
+end
+
+procedure backslash( x )                                        # backslash backslashes parenthesis in translation rules so that 
+    if type(x) == "string"					# chris barkers program won't use them as tree information.                 
+        then x := [x]
+    s := ""                                                     # start with an empty string.
+    state := 0                                                  # start with the state where we don't need a space before the next
+								# item.                                                           
+    every p := !x do                                            # traverse the list of strings.
+        if p == ("(" | ")") then                                # if it is a paren
+        {
+            s ||:= "\\" || p                                    # then put a backslash in front of it,
+            state := 0                                          # and set the state so that we don't put a space after the paren.
+        } else {                                                # otherwise:
+            if state = 1 then s ||:= " "                        # if the state says so, put a space.
+            state := 1                                          # set the state so that the next thing will have a space
+								# before it.                                            
+            s ||:= p                                            # put the next item on the end of the string.
+        }
+    return s                                                    # return the new string.
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 83 -                           
+
+
+
+procedure cb_tree_trans( pt )                                   # cb_tree_trans converts a p_tree into something that chris barkers
+    local s, r, n						# tree program can deal with.  The translation rules are put in on the
+								# second line of each node.                                           
+    case type( pt ) of
+    {
+        "idol_object":                                          # if it's a p_tree
+        {
+            s := backslash( pt$trans() )                        # get a usable string of the translation rule.
+            r := pt$cat()                                       # get the node category.
+            if *s > 0 then                                      # if there is a translation rule (if the length of the
+            {                                                   # string returned by 'backslash()' is larger than 0)
+                n := (*r < *s | *r)                             # get the maximum width between the translation rule
+                                                                # string and the category string.
+                r := center(r,n)                                # center the two things.
+                s := center(s,n)
+                s := "(" || r || "\n" || s                      # put them together with a newline.
+            } 
+            else s := "(" || r                                  # if there is no translation then just use the category label.
+            every s ||:= cb_tree_trans( !(pt$children()) )      # now, append all the children.
+            s ||:= ")"                                          # put on the closing paren
+            return s                                            # and return.
+        }
+        
+        "string": return "(" || pt || ")"                       # if it's a string then put it in parenthesis and return it.
+        default: write( "*** bad input to cb_tree_trans()" )
+    }
+end
+
+procedure cb_tree( pt )                                         # cb_tree is the oldfashioned one.  it doesn't show translations.
+    local s                                                     # This is what is used for the parse-string that can be displayed. 
+    case type( pt ) of
+    {
+        "string": return "(" || pt || ")"
+        "idol_object":
+        {
+            s := "(" || pt$cat()
+            every s ||:= cb_tree( !(pt$children()) )
+            return s || ")"
+        }
+        default: write( "*** bad input to cb_tree()" )
+    }
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 84 -                           
+
+
+
+
+################################################################
+# translator.iol
+
+global var_count
+
+procedure translate( x )                                # procedure translate() is the interface procedure to the translator.
+  var_count := 1                                        # first we make all the gamma variables unique so they won't collide.
+  fix_gamma_variables( x )    
+  every t := inner_translate( x ) do                    # now go on to the inner translator.  Every time a translation is 
+    if *t = 1 then                                      # generated, check to see that there is nothing in storage (i.e.
+    {                                                   # the list is length 1).
+      t := gamma(t[1])                                  # gamma reduce the result.
+      if \disp_translation then                         # if the translation-display switch is on 
+        fout$Write( lisp_stree( t ))                    # then show the translation.
+      suspend t                                         # generate the translation.
+    }
+end
+
+procedure inner_translate( x, pos, var )                # procedure inner_translate() does all the translation.
+  local name                                            # pos tells which child node we're working on.
+                                                        # var is the variable that was created by "!"
+  if type(x$trans()) == "string"                        # at a leaf return the words semantic value.
+    then return [x$trans()]
+
+  /pos := 1                                             # start at the left of the list by default.
+
+  if pos > *(x$trans())                                 # if we've reached the end of the list of children then
+    then return [""]                                    # return "" to be concatenated on the end.
+  else if pos = 1 & x$trans()[1] == "!" then            # check to see if we're building a quantifier.
+  {
+    var := next_Var()                                                    # get a new variable for the evaluator.
+    name := ( inner_translate(x$children()[numeric(x$trans()[2])])[1] |  # set the name to the value of the second thing in the
+              x$trans()[2]                                               # translation rule.
+            )
+    every t := inner_translate(x, 3, var) do                    # now get every translation of the rest of the rule.
+      suspend check_node( x, pos, var, [ [name, t[1]] ] ||| t[2:0] )  # generate var as the translation, 
+  }                                                                   # and the translation as stored.
+  else                                                          # if it isn't a quantifier
+    every t_next := inner_translate(x, pos+1, var) do           # iterate over the translations of the rest of the rule.
+    {
+      if n := numeric(x$trans()[pos]) then                      # if the thing at pos in the translation rule is a number
+        every t_this := inner_translate(x$children()[n]) do     # get the translation of that child,
+          suspend check_node(x, pos,                            # and generate it with the translation of the rest of the rule.
+                             t_this[1] || " " || t_next[1],
+                             t_this[2:0] ||| t_next[2:0])
+      else if x$trans()[pos] == "&var" then                     # if the thing at pos is "&var" 
+        suspend check_node(x, pos, var || " " || t_next[1], t_next[2:0]) # then put the variable in the translation
+      else                                                                          # otherwise
+        suspend check_node(x, pos, x$trans()[pos] || " " || t_next[1], t_next[2:0]) # just use the thing in the rule at pos.
+    }
+end
+
+################################################
+# cooper operations
+
+
+
+
+
+
+
+                           - 85 -                           
+
+
+
+procedure check_node( x, pos, translation, storage )            # procedure check_nodes() checks to see if we have a cooper node.
+  if pos > 1                                                    # if we haven't got the whole rule translated, then 
+    then return [translation] ||| storage                       # don't permute.
+  if member( cur_c$nodes(), x$cat() )                           # otherwise, if the current node is a cooper node
+    then suspend check_restricted( permute( translation, storage ), x$cat() )  # do the permutations
+    else return check_restricted( [translation] ||| storage, x$cat() )         # else don't
+end
+
+procedure permute( t, coop )                                    # procedure permute() checks for gamma functions and then passes the
+                                                                # parameter to inner_permute().
+  if type(t) == "string"                                        # if it may not have been gamma reduced
+    then t := gamma( t )                                        # then do so now.
+  if \preserve_type & type(t) == "list" & *t > 2 & t[1] == "gamma" then  # if we have a gamma function
+  {
+    every x := permute( t[3], coop ) do                                  # then strip it off, permute on that, 
+      suspend ["(gamma " || t[2] || " " || x[1] || ")"] ||| x[2:0]       # and un-strip it.
+  }
+  else                                                          # otherwise, 
+  {
+    t := lisp_stree(t)                                          # make it back into a string
+    suspend inner_permute( t, coop )                            # and do the real permute.
+  }
+end
+
+procedure inner_permute( t, coop )                              # procedure inner_permute() does the real permute.
+  local i
+  suspend [t] ||| coop                                          # first do the one with nothing brought out of storage.
+  every i := 1 to *coop do                                      # for every item in storage
+    if not violates( coop, i ) then                             # check for raising violations,
+    {
+      suspend inner_permute(                                    # and recurse
+        "(" || coop[i][2] || " " || t || ")",                   # with the quantifier brought in
+        coop[1:i]|||coop[i+1:0]                                 # and storage with that quantifier extracted.
+      )
+    }
+end
+
+procedure violates( l, c )                                      # violates() checks names of things in storage.
+  name := l[c][1]
+  every i := 1 to c-1 do
+  {
+    if (name == l[i][1]) == ("E" | "A")                         # don't raise an "E" past an "E", or an "A" past an "A".
+      then return
+  }
+  fail
+end
+
+procedure check_restricted( t, nd_name )                        # procedure check_restricted() checks to see 
+  if member( cur_c$restricted(), nd_name ) then                 # if the current node is a cooper-restricted node.
+  {
+    if *t > 1                                                   # if there is something in storage
+      then fail                                                 # then fail
+      else return t                                             # otherwise, let the translation pass
+  }                                                             # if the node is not restricted
+  return t                                                      # let the translation pass
+end
+
+################################################
+# gamma function operations
+
+
+
+                           - 86 -                           
+
+
+
+procedure fix_gamma_variables( p )                              # procedure fix_gamma_variables() goes thru the p_tree making 
+  local i, t                                                    # all the variable unique.
+  if type(p) ~== "idol_object" then return                      # if at a leaf, return.
+  t := p$trans()                                                # get the translation of the node.
+  every i := 1 to *t - 1 do                                     # examine every part of the translation rule
+  {
+    if t[i] == "gamma" then                                     # for a gamma
+    {
+      t := l_replace( t[i+1], t, t[i+1] || "-" || var_count )   # and replace all occurances with the variable a number on it.
+      var_count +:= 1                                           # go to the next number.
+    }
+  }
+  p$set_trans( t )                                              # reset the translation of the node to have the unique variables.
+  every fix_gamma_variables( !(p$children()) )                  # and fix all the children, too.
+end
+
+procedure gamma( x )                                            # procedure gamma() changes a string to a list
+  return gamma_reduce(                                          # and does the gamma reduction.
+    if type(x) == "string"                                      # if the parameter is a string,
+        then lisp_ltree(x)                                      # make it a list
+        else x                                                  # otherwise, just use the parameter.
+  )
+end
+
+procedure gamma_reduce( x )                                     # procedure gamma_reduce() looks for gamma functions.
+  local new_x
+  if type(x) == "list" then                                     # if we have an expression (not just a word)
+  {
+    if (*x = 2) &                                               # and there are two items in it,
+       (*x[1] = 3) &                                            # and the first one has three things in it (gamma var xxx).
+       (x[1][1] == "gamma") &                                   # and the first thing there is a gamma
+       (type(x[1][2]) == "string")                              # and its argument is a string
+    then                                                        # we have: ( ( gamma string  xxx ) yyy )
+      return gamma_reduce(l_replace( x[1][2], x[1][3], x[2] ))  # then replace the string in xxx with yyy, and gamma reduce that.
+    new_x := []                                                 # start a new expression.
+    every put( new_x, gamma_reduce( !x ) )                      # gamma reduce each thing into the new expression.
+    return new_x                                                # return the new one.
+  }
+  else                                                          # if it isn't an expression
+    return x                                                    # just return it.
+end
+
+procedure l_replace( var, exp, val )                            # procedure l_replace() replaces every var in exp with val.
+  local new_exp 
+  if type(exp) == "list" then                                   # if we have an expression
+  {
+    new_exp := []                                               # start a new expression,
+    every put( new_exp, l_replace( var, !exp, val ) )           # and put every item, with replacements made, in the new one,
+    return new_exp                                              # and return it.
+  }
+  else                                                          # if we don't have an expression
+    if exp == var                                               # check to see if what we have is the variable.
+      then return val                                           # if so replace it,
+      else return exp                                           # otherwise leave it alone.
+end
+
+
+
+
+
+
+
+                           - 87 -                           
+
+
+
+procedure lisp_stree( ltree )                                   # procedure lisp_stree() changes a list to a string.
+    local s
+    if type(ltree) == "string" then return ( ltree || " ")      # put a space on the end of a leaf.
+    s := "("                                                    # start with a left paren,
+    every s ||:= (lisp_stree( !ltree ))                         # get all the sublists,
+    return s[1:-1] || ") "                                      # and put on a right paren.
+end
+
+procedure lisp_ltree( stree )                                   # procedure listp_ltree() changes a string to a list.
+    if type(stree) == "string"                                  # if the input is a string
+        then stree := toke_list( stree, '()' )                  # make it a list of tokens
+    if *stree = 1                                               # if there is only one thing in the list
+        then return stree[1]                                    # then return it.
+    if lbal(stree) ~= *stree                                    # check to make sure the parentheses are balanced, or
+        then fail                                               # fail.
+    p := 2                                                      # go to the item after the first paren.
+    thelist := []                                               # start a new list.
+    while p < *stree do                                         # while we not at the end of the list of tokens
+    {
+        rp := lbal(stree[p:0])+p                                # get a paren-balanced unconverted sublist
+        put(thelist, lisp_ltree(stree[p:rp]))                   # and put the converted sublist in the new list.
+        p := rp                                                 # move ahead to the next token.
+    }
+    return thelist                                              # return the new list.
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 88 -                           
+
+
+
+
+################################################################
+# evaluator.iol
+#
+# this file contains the different objects that the "evaluator" uses.
+# These are:
+#   atom         word
+#   variable     .word
+#   predicate    word'
+#   boolean      True | False
+#   expression   (...)
+#   list         <...>
+#   set          {...}
+#
+# every object has at least these methods:
+#   Eval,
+#   Image,
+#   Equal,
+#   Type, and
+#   element.
+# Eval evaluates an object and return the result.
+# Image returns a string of what the object looks like.
+# Equal assumes that it's parameter is the same type and checks
+# to make sure it is equal to itself.  Equal does NOT evaluate its
+# argument!  There is an expression function "_equal" which does.
+# Type returns a string with the type of the object.
+# element generates all the atoms within the object.
+#
+# every type has an associated "new_TYPE" procedure which creates
+# a new object of that type.  In some cases it checks to make
+# sure it isn't making a look-alike.
+#
+
+global err_flag                                                 # err_flag is used to halt evaluation when an error occurs.  when
+                                                                # the value is &null then it is not set.  if its value is non-null
+                                                                # then it is set.  
+
+procedure evaluate( x )                                         # procedure evaluate() is the interface procedure to the outside.
+                                                                # if it can convert the parameter to some evaluator object then it
+                                                                # resets the error flag and evaluates the object.  When the
+                                                                # evaluation is done it checks the error flag to make sure there
+                                                                # were no errors.  if so then the value returned by the evaluation
+                                                                # is shown.
+  if t := convert(x) then                                       # if we can convert the parameter to a evaluatable object
+  {
+    err_flag := &null                                           # reset the error flag.
+    r := t$Eval()                                               # evaluate the object.
+    if /err_flag then                                           # if the error flag is not set 
+      fout$Write( r$Image() )                                   # then display the result.
+    return
+  }                                                             
+  fail                                                          # if the input can't be converted then the procedure fails.
+end
+
+
+
+
+
+
+
+
+
+                           - 89 -                           
+
+
+
+procedure convert( x )                                          # convert() takes a string or a list of strings and makes an object
+                                                                # out of it.  This is basically the top level of a hand-written
+                                                                # recursive descent parser.
+  if type(x) == "string" then                                   # if it's a string
+  {
+    x := toke_list(x, '(){}<>')                                 # make it into a list of strings.  brackets are punctuation marks.
+    if (*x > 1) & (not balanced(x))                             # check to make sure all the brackets are balanced.
+      then fail                                                 # if they aint then fail.
+  }
+  case x[1] of
+  {                                                             # first check for compound types:
+    "(": return new_Expression(x)                               # if the first thing is a "(" then make an expression;
+    "{": return new_Set(x)                                      # if "{" then make a set; or
+    "<": return new_List(x)                                     # if "<" then make a list.
+    default:                                                    # otherwise figure out what kind of simple object it is:
+    {
+      x := x[1]
+      if x == Nil$Image() then return Nil                       # if it looks like nil it is;
+      if x == True$Image() then return True                     # if it looks like true it is;
+      if x == False$Image() then return False                   # if it looks like false it is;
+      if x[1] == "." then return new_Variable(x)                # if it starts with a period it's a variable;
+      if x[-1] == "'" then return new_Predicate(x)              # if it ends with prime it's a predicate;
+      return new_Atom(x)                                        # otherwise it's an atom.
+    }
+  }
+end
+
+procedure next_Var( mark )                                      # procedure next_Var() is called by the translator to get variables
+  static letter, number, alphabet                               # for quantifiers.  it starts at ".a" and then goes to ".z", then
+                                                                # ".a1" to ".z1", etc.  If somebody wants a special looking variable
+                                                                # they can call this procedure with a mark.  It will go between the
+                                                                # period and the letter.
+  initial {                                                     # this gets done the first time:
+    letter := "z"                                               # set the letter to "z" so that we start with "a".
+    number := -1                                                # set the number to -1 so that we start with 0.
+    alphabet := string(&lcase)
+  }
+  /mark := ""
+  if letter == "z"                                              # if we're at the end of the alphabet
+    then letter := "a" & number +:= 1                           # then go back to "a" and use the next number,
+    else letter := alphabet[ find(letter, alphabet) + 1 ]       # otherwise get the next letter
+  if number > 0                                                 # if the number is larger than 0
+    then return "." || mark || letter || number                 # then use it in the variable name
+    else return "." || mark || letter                           # otherwise don't
+end
+
+procedure Equal( x, y )                                         # procedure Equal() checks to see that two objects are the same.
+  if x$Type() ~== y$Type() then fail                            # if they aren't the same type then fail.
+  return x$Equal(y)                                             # otherwise pass the job on to one of them.
+end
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 90 -                           
+
+
+
+################################################
+# class Atom
+#
+# the string that the atom is is kept in the "a" field.
+#
+class Atom( a )
+  method Eval()
+    if \err_flag then return Nil
+    return self                                                 # the value of an atom is itself.
+  end
+
+  method Image()
+    return self.a
+  end
+
+  method Type()
+    return "Atom"
+  end
+
+  method element()
+    return self
+  end
+
+  method Equal(y)
+    if self.a == y$Image()                                      # if they have the same image then 
+      then return                                               # they're equal,
+      else fail                                                 # otherwise not.
+  end
+end
+
+
+
+procedure new_Atom(x)                                           # new_Atom keeps a table of all the atoms created.  This way
+  static Atom_t                                                 # we don't get multiple atoms that look the same. 
+  initial Atom_t := table()                                     # initialize the table the first time.
+  /Atom_t[x] := Atom(x)                                         # if the table doesn't have one, put a new one in.
+  return Atom_t[x]                                              # return the one in the table.
+end
+
+
+################################################
+# class Predicate
+#
+# the difference between a predicate and an atom is that the value of
+# a predicate is a set kept in the current model.
+#
+class Predicate( a )
+  method Eval()
+    local r
+    if \err_flag then return Nil;   r := cur_m$Eval( self$Image() )   # get the associated object from the current model,
+    if \err_flag then return Nil;   r := r$Eval()                     # evaluate it,
+    if \err_flag then return Nil;   return r                          # and return it.
+  end
+
+  method Image()
+    return self.a
+  end
+
+
+
+
+
+                           - 91 -                           
+
+
+
+  method Type()
+    return "Predicate"
+  end
+
+  method element()
+    fail                                                        # if a predicate is in the model, so are all of its atoms.
+  end
+
+  method Equal(y)
+    if self.a == y$Image()                                      # again, if it looks the same it is.
+      then return
+      else fail
+  end
+end
+
+procedure new_Predicate(x)
+  static Predicate_t
+  initial Predicate_t := table()                                # initialize the table the first time.
+  /Predicate_t[x] := Predicate(x)                               # create a new predicate if necessary, and
+  return Predicate_t[x]                                         # return the predicate by that name.
+end
+
+################################################
+# class Boolean
+#
+# "tof" hold the string of the boolean: "true", "false", or "nil".
+#
+class Boolean( tof )
+  method Eval()
+    if \err_flag then return Nil
+    return self
+  end
+
+  method Image()
+    return self.tof
+  end
+
+  method Type()
+    return "Boolean"
+  end
+
+  method element()
+    fail                                                        # no atoms in a Boolean!
+  end
+
+  method Equal( x )
+    if x$Image() == self.tof
+      then return
+      else fail
+  end
+end
+
+# And nobody should be asking for new booleans.
+
+
+
+
+
+
+
+
+
+                           - 92 -                           
+
+
+
+################################################
+# class Variable
+#
+# v is the form of the variable, vals is the value stack.
+#
+class Variable( v, vals )                                       
+  method Eval()
+    if \err_flag then return Nil
+    if *self.vals = 0                                           # if the variable has no value
+      then {
+        err_flag := 1                                           # then set the error flag,
+        fout$Write("unbound variable: " || self$Image())        # display an error message,
+        return Nil                                              # and return nil.
+      }
+      else return (self.vals[1])$Eval()                         # otherwise return the value of the thing on the top of the stack.
+  end
+
+  method Image()
+    return self.v                                               # return the form of the variable.
+  end
+
+  method Type()
+    return "Variable"
+  end
+
+  method Set( x )
+    push( self.vals, x )                                        # put a new object on the stack,
+    return x                                                    # and return it.
+  end
+
+  method Reset()
+    if *self.vals = 0                                           # if there is no value on the stack
+      then return Nil                                           # then return nil,
+      else return pop( self.vals )                              # otherwise pop a value from the stack and return it.
+  end
+
+  method Equal(x)
+    if self.v == x$Image()
+      then return
+      else fail
+  end
+
+  method element()
+    fail
+  end
+
+initially
+  self.vals := []                                               # initialize the stack.
+end
+
+procedure new_Variable(x)
+  static var_table
+  initial var_table := table()                                  # the first time this is called set up the table.
+  /var_table[x] := Variable(x)                                  # if the table hasn't got one put in a new one.
+  return var_table[x]                                           # return the variable.
+end
+
+
+
+
+
+
+                           - 93 -                           
+
+
+
+################################################
+# class Expression
+#
+# e holds the list of items in the expression.
+# var holds the variable part of a quantified expression.
+# restriction holds the restriction part.
+# scope holds the scope part.
+# log1 and log2 hold the value of arguments to logical functions.
+#
+class Expression( e, var, restriction, scope, log1, log2 )      
+  method Type()
+    return "Expression"
+  end
+
+  method Eval()
+    if \err_flag then return Nil
+    if (self.e[1])$Type() == "Atom" then                        # if the first thing in the expression is an atom
+      case (self.e[1])$Image() of                               # check to see if it is a predefined function.
+      {
+        "set":   if (self.e[2])$Type() == "Variable"            # set a variable if the type of the first argument is "Variable"
+                   then return (self.e[2])$Set( self.e[3] )      
+        "reset": if (self.e[2])$Type() == "Variable"            # reset a "Variable"
+                   then return (self.e[2])$Reset()
+
+        "A":           return self$_for_all()                   # universal 
+        "E":           return self$_there_exists()              # existential 
+        "EU":          return self$_there_exists_unique()       # unique existential
+        "M":           return self$_most()                      # "most" quantifier
+
+        "&"|"and"|"^": return self$_and()                       # conjunction
+        "v"|"or":      return self$_or()                        # discjunction
+        "xv"|"xor":    return self$_exclusive_or()              # exclusive discjunction
+        "impl":        return self$_implies()                   # implication
+        "~"|"!"|"not": return self$_not()                       # negation
+        "bimpl":       return self$_bi_implies()                # bi-implication
+
+        "equal"|"=":   return self$_equal()                     # equality
+      }                                                         # otherwise
+    return self$Predicate()                                     # assume it's a predicate.
+  end
+
+  method Image()
+    local s
+    if *self.e = 0 then return "()"                             # if it's an empty expression show it.
+    s := "("                                                    # start with a left paren,
+    every s ||:= (!self.e)$Image() || " "                       # get the images of all the things in the expression,
+    return s[1:-1] || ")"                                       # put on a right paren and return it.
+  end
+
+  method element()
+    suspend (!self.e)$element()                                 # generate all the atoms in the expression.
+  end
+
+  method fetch_e()
+    return self.e                                               # return the expression for the Equal method.
+  end
+
+
+
+
+
+
+                           - 94 -                           
+
+
+
+  method Equal(x)
+    local other_e
+    other_e := x$fetch_e()                                      # get the list of things in the other expression.
+    if *other_e ~= *self.e then fail                            # if they're not the same length then they're not equal.
+    every i := 1 to *self.e do                                  # check all the items in the expressions
+      if not (Equal( self.e[i], other_e[i] ))                   # to see if they're equal.
+        then fail                                               # if one aint, then fail.
+    return
+  end
+
+################################################
+# quantifiers
+#
+  method quantify()                                             # quantify() breaks apart the separate elements of a 
+                                                                # quantifier expression, and checks all the types.
+    (self.var := \(self.e[2]) &                                 # the variable is the second thing in the expression
+     (self.var)$Type() == "Variable" &                          # and must be "Variable" type.
+     self.restriction := \(self.e[3]) &                         # the restriction is the third thing in the expression.
+     self.scope := \(self.e[4])                                 # the scope is the fourth, and last thing in the expression.
+    ) | (msg$Write( "Expression error: not of form (quant var " ||  # error message if something didn't work out.
+                    "restriction scope): " || self$Image()) & 
+         err_flag := 1 & fail)                                  # set the error flag and fail
+    return                                                      # if every thing is alright, return.
+  end
+
+  method _for_all()                                             # UNIVERSAL
+    local x, r_flag, nil_count, flag
+    self$quantify() | fail                                      # set up the quantifier stuff or fail.
+    flag := True                                                # set the flag to true.
+    nil_count := 0                                              # initialize a counter for unknowns.
+    every val := cur_m$domain() do                              # iterate with all the atoms in the current model.
+    {
+      if \err_flag then return Nil
+      (self.var)$Set( val )                                     # set the variable.
+
+      r_flag := (self.restriction)$Eval()                       # evaluate the restriction.
+      if Equal(r_flag, Nil)                                     # if it's nil
+        then nil_count +:= 1                                    # then increment the counter.
+      if Equal(r_flag, True ) then                              # (otherwise) if it's true
+      {
+        flag := (self.scope)$Eval()                             # then evaluate the scope.
+        if Equal( flag, Nil )                                   # if that's nil
+          then nil_count +:= 1                                  # then increment the counter.
+      }
+      (self.var)$Reset()                                        # reset the variable.
+      if Equal( flag, False )                                   # if we found a true restriction and false scope
+        then return False                                       # then it's false
+    }                                                           # after iterating with all the atoms
+    if nil_count > 0                                            # check to see if we found any nils.
+      then return Nil                                           # if so return nil,
+    return True                                                 # otherwise return true. (found no contrary evidence.)
+  end
+
+
+
+
+
+
+
+
+
+
+                           - 95 -                           
+
+
+
+  method _there_exists()                                        # EXISTENTIAL
+    local nil_count, flag, r_flag
+    self$quantify() | fail                                      # do the quantifier setup stuff or fail.
+    flag := False                                               # set the flag to false.
+    nil_count := 0                                              # initialize the nil counter.
+    every val := cur_m$domain() do                              # iterate with all the atoms in the model.
+    {
+      if \err_flag then return Nil
+      (self.var)$Set( val )                                     # set the variable to the atom.
+      r_flag := (self.restriction)$Eval()                       # evaluate the restriction.
+      if Equal(r_flag, Nil)                                     # if it is nil
+        then nil_count +:= 1                                    # then increment the nil counter.
+      if Equal(r_flag, True ) then                              # (otherwise) if it is true
+      {
+        flag := (self.scope)$Eval()                             # then evaluate the scope,
+        if Equal(flag, Nil)                                     # and if that is nil
+          then nil_count +:= 1                                  # increment the nil counter.
+      }
+      (self.var)$Reset()                                        # reset the variable.
+      if Equal( flag, True ) then return True                   # if the restriction and scope were true the return true.
+    }                                                           # after the atomic iteration
+    if nil_count > 0                                            # check the nil counter.  if we found a nil item
+      then return Nil                                           # then return nil,
+    return False                                                # otherwise return false.
+  end
+
+  method _there_exists_unique()                                 # UNIQUE EXISTENTIAL
+    local flag, counter_t, counter_n, r_flag
+    self$quantify() | fail                                      # do the quantifier setup or fail.
+    counter_t := counter_n := 0                                 # initialize the true and nil counters.
+    every val := cur_m$domain() do                              # iterate with the atoms in the model.
+    {
+      if \err_flag then return Nil
+      (self.var)$Set(val)                                       # set the variable.
+      r_flag := (self.restriction)$Eval()                       # evaluate the restriction.
+      if Equal(r_flag,Nil)                                      # if the restriction is nil
+        then counter_n +:= 1                                    # then increment the nil counter.
+      if Equal(r_flag, True ) then                              # if the restriction is true
+      {
+        flag := (self.scope)$Eval()                             # evaluate the scope.
+        if Equal(flag, True) then counter_t +:= 1               # if the scope is true increment the true counter.
+        if Equal(flag, Nil) then counter_n +:= 1                # if the scope is nil increment the nil counter.
+      }
+      (self.var)$Reset()                                        # reset the variable
+      if counter_t > 1 then return False                        # if we've found more than one existence return false.
+    }                                                           # after done iterating:
+    if counter_n > 0                                            # if we found some unknown ones
+      then return Nil                                           # then return nil.
+    if counter_t = 1                                            # if we found exactly one true restriction and true scope
+      then return True                                          # then return true.
+    return False                                                # otherwise return false.
+  end
+
+
+
+
+
+
+
+
+
+
+                           - 96 -                           
+
+
+
+  method _most()                                                # MOST
+    local flag, r_flag, true_count, false_count, nil_count
+    self$quantify() | fail                                      # do the quantifier setup or fail.
+    true_count := false_count := nil_count := 0                 # initialize all the counters.
+    every val := cur_m$domain() do                              # iterate with all the atoms in the model.
+    {
+      if \err_flag then return Nil
+      (self.var)$Set(val)                                       # set the variable.
+      r_flag := (self.restriction)$Eval()                       # evaluate the restriction.
+      if Equal(r_flag, Nil)                                     # if the restriction is nil
+        then nil_count +:= 1                                    # increment the nil counter.
+      if Equal(r_flag, True ) then                              # if the restriction is true
+      {
+        flag := (self.scope)$Eval()                             # evaluate the scope.
+        if Equal(flag, True)                                    # if the scope is true
+          then true_count +:= 1                                 # increment the true counter.
+        if Equal(flag, False)                                   # if the scope is false
+          then false_count +:= 1                                # increment the false counter.
+        if Equal(flag, Nil)                                     # it it's nil
+          then nil_count +:= 1                                  # increment the nil counter.
+      }
+      (self.var)$Reset()                                        # reset the variable.
+    }                                                           # after the atomic iteration:
+    if true_count + false_count + nil_count = 0                 # if the restriction was never true
+      then return True                                          # then return true.
+    if true_count > false_count + nil_count                     # if we found more true than false and nil
+      then return True                                          # return true.
+    if false_count >= true_count + nil_count                    # if we found more false than (true and nil) - 1
+      then return False                                         # then return false.
+    return Nil                                                  # otherwise return nil.
+  end
+
+################################################
+# logical functions
+#
+  method _not()                                                               # NOT
+    local x
+    if *self.e ~= 2 then                                                      # check that we have one argument.
+    {
+      msg$Write( "function takes one argument: " || self$Image() )            # if we don't give an error,
+      err_flag := 1                                                           # set the error flag, 
+      return Nil                                                              # and bomb out.
+    }
+    x := (self.e[2])$Eval()                                                   # evaluate the argument.
+    if x$Type() ~== "Boolean" then                                            # if it's not boolean
+    {
+      msg$Write( "value of argument must be boolean: " || self$Image() )      # give an error.
+      err_flag := 1                                                           # set the error flag.
+      return Nil
+    }
+    if Equal( x, Nil )   then return Nil                                      # (not nil) is nil.
+    if Equal( x, False ) then return True                                     # (not false) is true.
+                              return False                                    # (not true) is false.
+  end
+
+
+
+
+
+
+
+
+                           - 97 -                           
+
+
+
+  method pre_logical_function()                                               # pre_logical_function does the evaluating and 
+                                                                              # type checks for binary logical functions.
+    if *self.e ~= 3 then                                                      # check that we have two arguements
+    {
+      msg$Write( "function takes two arguments: " || self$Image() )           # or give an error
+      err_flag := 1                                                           # and set the error flag.
+      fail
+    }
+    self.log1 := (self.e[2])$Eval()                                           # evaluate the first argument,
+    self.log2 := (self.e[3])$Eval()                                           # and the second.
+    if self.log1$Type() ~== "Boolean" | self.log2$Type() ~== "Boolean" then   # if either isn't boolean
+    {
+      msg$Write( "value of arguments to must be boolean: " || self$Image() )  # write and error message,
+      err_flag := 1                                                           # and set the error flag.
+      fail
+    }
+    return                                                                    # finished ok.  
+  end
+
+  method _and()                                                               # AND
+    if not self$pre_logical_function()                   then return Nil      # setup or bomb.
+    if Equal(self.log1, False) | Equal(self.log2, False) then return False    # if either is false then return false,
+    if Equal(self.log1, Nil) | Equal(self.log2, Nil)     then return Nil      # (otherwise) if either is nil then return nil,
+                                                              return True     # (otherwise) return true.
+  end
+
+  method _or()                                                                # OR
+    if not self$pre_logical_function()                   then return Nil      # setup or bomb.
+    if Equal(self.log1, True) | Equal(self.log2, True)   then return True     # if either is true then return true,
+    if Equal(self.log1, Nil) | Equal(self.log2, Nil)     then return Nil      # (otherwise) if either is nil then return nil,
+                                                              return False    # (otherwise) return false.
+  end
+
+  method _exclusive_or()                                                      # XOR
+    if not self$pre_logical_function()                   then return Nil      # setup or bomb.
+    if Equal(self.log1, Nil) | Equal(self.log2, Nil)     then return Nil      # if either is nil then return nil,
+    if Equal(self.log1, self.log2)                       then return False    # (otherwise) if they're equal then return false,
+                                                              return True     # (otherwise) return true.
+  end
+
+  method _implies()                                                           # IMPL
+    if not self$pre_logical_function()                   then return Nil      # setup or bomb.
+    if Equal(self.log1, False)                           then return True     # if the first argument is false then return true.
+    if Equal(self.log1, Nil)                             then return Nil      # if the first argument is nil then return nil.
+                                                              return log2     # otherwise return the second argument.
+  end
+
+  method _bi_implies()                                                        # BIMPL
+    if not self$pre_logical_function()                   then return Nil      # setup or bomb.
+    if Equal( self.log1, Nil ) | Equal( self.log2, Nil ) then return Nil      # if either argument is nil then return nil.
+    if Equal( self.log1, self.log2 )                     then return True     # if they're equal then return true.
+                                                              return False    # otherwise return false.
+  end
+
+
+
+
+
+
+
+
+
+                           - 98 -                           
+
+
+
+  method _equal()                                                             # EQUAL
+    if *self.e ~= 3 then                                                      # if we don't have exactly two arguments
+    {
+      msg$Write( "function \"equal\" takes two arguments: " || self$Image() ) # give and error message,
+      err_flag := 1                                                           # set the error flag,
+      return Nil                                                              # and bomb out.
+    }
+    if Equal( (self.e[2])$Eval(), (self.e[3])$Eval() )                        # if the values of the arguments are equal
+      then return True                                                        # then return true
+      else return False                                                       # otherwise return false.
+  end
+
+################################################
+# predicates
+#
+  method Predicate()
+    local memb, arg, arg2, func, i, v, new_x
+    if *self.e > 1 then                                         # check that we have at least one argument.
+    {
+      every i := 2 to *self.e do                                # iterate over the arguments
+      {
+        if \err_flag then return Nil
+        if Equal( IndInd, self.e[i] ) then                      # looking for an individual indeterminate.
+        {                                                       # if we find one
+          v := new_Variable( next_Var("?") )                    # get a new variable
+          new_l := self.e[1:i] ||| [v] ||| self.e[i+1:0]        # and build a ...
+          new_x := new_Expression( new_l, 1 )                   # new expression;
+          self.e := [new_Atom("E"), v, True, new_x]             # and make this expression an existential,
+          return self$Eval()                                    # and evaluate it.
+        }
+      }                                                         # if there are no individual indeterminates
+      func := (self.e[1])$Eval()                                # evaluate the function (predicate).
+      if func$Type() ~== "Set"                                  # if the result is not a "Set"
+        then {
+          err_flag := 1                                         # then set the error flag,
+          fout$Write("not a function: " || func$Image())        # write an error message,
+          return Nil                                            # and bomb out.
+        }                                                       # if everything is ok
+      arg := (new_List( self.e[2:0], 1 ))$Eval()                # make a "List" from the arguments and evaluate it.
+      every memb := func$Bang() do                              # search through the "Set"
+      {
+        if \err_flag then return Nil
+        if (memb$Type() ~== "List") |                           # looking for a "List" 
+           (memb$Splat() ~= arg$Splat() + 1) then next          # that is the one longer than the one we made from the arguments.
+        arg2 := (memb$aCdr())$Eval()                            # if the value of the anti-cdr of the list from the set
+        if Equal( arg, arg2 )                                   # is equal to the list we made from the arguments
+          then return (memb$aCons())$Eval()                     # then return the anti-cons of the list from the set.
+      }                                                         # if we can't find a mapping
+      return Nil                                                # return nil
+    }
+  end
+end
+
+
+
+
+
+
+
+
+
+
+                           - 99 -                           
+
+
+
+procedure new_Expression( x, immediate )
+  local e, cnt, right_cnt
+  if \immediate                                                 # if we don't need to conver the pieces in the list
+    then return Expression( x )                                 # just make a new expression
+  e := []                                                       # start a new list
+  cnt := 2                                                      
+  while cnt < *x do                                             # while there are more things in the list
+  {
+    right_cnt := lbal(x[cnt:0]) + cnt                           # find the next bracketed thing,
+    put(e, convert(x[cnt:right_cnt]))                           # convert it, and put it in the list;
+    cnt := right_cnt                                            # move on to the next thing.
+  }
+  return Expression( e )                                        # make a new expression out of the new list.
+end
+
+################################################
+# class List
+#
+# the "l" field hold the list of things in the List.
+#
+class List( l )
+  method Type()
+    return "List"
+  end
+
+  method Eval()
+    local newl
+    if \err_flag then return Nil
+    newl := []                                                  # make a new list
+    every put( newl, (!(self.l))$Eval() )                       # evaluate everything in the List and put it in the list.
+    return new_List(newl, 1)                                    # return the new List.
+  end
+
+  method Splat()
+    return *self.l                                              # return how many things are in the list.
+  end
+
+  method aCdr()                                                 # anti-cdr. (everything but the last in the list)
+    return new_List( self.l[1:-1], 1 )                          # return a List of everything but the last.
+  end
+
+  method aCons()                                                # anti-cons. (the last thing in the list)
+    return self.l[-1]                                           # return the last thing in the list.
+  end
+
+  method Image()                                                # to see what a list looks like
+    local s
+    if *self.l = 0 then return "<>"                             # if there is nothing in the list just do "<>".
+    s := "<"                                                    # otherwise: start with a "<",
+    every s ||:= (!(self.l))$Image() || " "                     # get the image of everything in the list,
+    return s[1:-1]||">"                                         # and finally put on a ">".
+  end
+
+  method element()
+    suspend (!self.l)$element()                                 # return all the elements in all the things in the list.
+  end
+
+
+
+
+
+
+                          - 100 -                           
+
+
+
+  method fetch_l()
+    return self.l                                               # return the list of the List.
+  end
+
+  method Equal( x )                                             # to see if two lists are equal
+    local other_l
+    other_l := x$fetch_l()                                      # get the list of the other List,
+    if *self.l ~= *other_l                                      # check the length of both,
+      then fail
+    every i := 1 to *self.l do                                  # and then compare one to one down the line.
+      if not Equal( self.l[i], other_l[i] )
+        then fail
+    return
+  end
+end
+
+procedure new_List( x, immediate )
+  local l, cnt, right_cnt
+  if \immediate                                                 # if we don't need to convert
+    then return List(x)                                         # just make a new List.
+  l := []                                                       # otherwise: start a new list
+  cnt := 2
+  while cnt < *x do                                             # while there are still things in the list
+  {
+    r_cnt := lbal( x[cnt:0] ) + cnt                             # get the next bracketed thing,
+    put( l, convert( x[cnt:r_cnt] ))                            # convert it, and put it in the List;
+    cnt := r_cnt                                                # go on to the next thing.
+  }
+  return List( l )                                              # return a new List of the list.
+end
+
+################################################
+# class Set
+#
+# the "s" field holds the set of things in the Set.
+#
+class Set( s )
+    method Image()                                              # to see what a set looks like
+        local str
+        if *self.s = 0 then return "{}"                         # if there is nothing in it then "{}"
+        str := "{"                                              # otherwise: start with a "{",
+        every str ||:= (!self.s)$Image() || " "                 # get the image of everything in the set,
+        return str[1:-1] || "}"                                 # and then put on a "}"
+    end
+
+    method Eval()
+        local news
+        if \err_flag then return Nil
+        news := set()                                           # start a new set
+        every insert( news, (!self.s)$Eval() )                  # insert the values of all the things in the Set
+        return new_Set(news, 1)                                 # and return the new Set. (new_Set will remove duplicates.)
+    end
+
+    method Type()
+        return "Set"
+    end
+
+
+
+
+
+
+                          - 101 -                           
+
+
+
+  method Bang()
+    suspend !self.s                                             # generate all the things in the set.
+  end
+
+  method Member( y )                                            # to see if something is member
+    local x
+    every x := !self.s do                                       # iterate thru all the things in the Set
+      if Equal( x, y )                                          # looking for something equal.
+        then return
+    fail
+  end
+
+  method Splat()
+    return *self.s                                              # return how many things are in the Set.
+  end
+
+  method element()
+    suspend (!self.s)$element()                                 # return all the atoms in everything in the Set.
+  end
+
+  method Equal( x )                                             # to see if two Sets are equal
+    if *self.s ~= x$Splat()                                     # check the size of them;
+      then fail
+    every p := !self.s do                                       # and then check that every thing in one 
+      if not x$Member( p ) then fail                            # is in the other.
+    return
+  end
+end
+
+procedure new_Set( x, immediate )
+  local s, cnt, r_cnt, new
+  s := set()                                                    # start a new set.
+  if \immediate then                                            # if immediate, don't need to convert everything.
+  {
+    every new := !x do                                          # get every thing and
+      if not Equal( new, !s ) then insert( s, new )             # if it's not in the Set, then insert it.
+  }
+  else                                                          # not immediate:
+  {
+    cnt := 2
+    while cnt < *x do                                           # while theres things in the list (x)
+    {
+      r_cnt := lbal( x[cnt:0] )+cnt                             # get the next bracketed thing,
+      new := convert(x[cnt:r_cnt])                              # convert it,
+      cnt := r_cnt                                              # and move on to the next thing;
+      if not Equal( new, !s ) then insert( s, new )             # if the new one isn't in the Set then insert it.
+    }
+  }
+  return Set( s )                                               # return the new Set.
+end    
+
+
+
+
+
+
+
+
+
+
+
+
+                          - 102 -                           
+
+
+
+
+################################################################
+# file.iol
+#
+# this file does all the input/output directing.
+# there are three file directors: fin, fout, and msg.
+# each one of these keeps a stack of files.  when one closes
+# the one on the top of the stack automatically becomes current.
+#
+procedure file_status()                                         # display the names of the current files.
+   msg$Write( "input is          " || fin$Name() )
+   msg$Write( "output is         " || fout$Name() )
+end
+
+# class director
+#
+# an object of this type holds a stack of files.
+# the direction field says which way the stuff is flowing.  the
+# name field contains the name of the current file.  the file 
+# has the current file.  and the stack field contains the 
+# stack of pending files.
+class director( direction, name, file, stack )
+    method Read()
+        local s
+        if self.name == "stdin"                                 # if we're reading from the console, 
+          then writes( "? " )                                   # show a "?" prompt.
+        s := ""                                                 # start with an empty string.
+        while s ||:= read(self.file) do                         # read the current file while possible.
+        {
+          s ?:= trim(tab(upto('#')|0), ' \t')                   # strip every thing after the "#" (comment) mark.
+          if (*s > 0) & (s[-1] ~== "\\")                        # if we got some good stuff and the last character on the 
+                                                                # line is not a backslash
+            then return s                                       # then return what we've got.
+          s := s[1:-1] || " "                                   # otherwise put on a space " ".
+          if self.name == "stdin" then                          # if we're reading from the console
+          {
+            if *s > 0 then writes("-")                          # if we're continuing an input line then show a dash.
+            writes("? ")                                        # give the next prompt
+          }
+        }
+        write("-- eof --")                                      # let the user know that a file ended.
+        self$Close() | fail                                     # pop to the next file in the stack, or fail.
+        return self$Read()                                      # read from the new file.
+    end
+
+    method Write(s)
+        return write( self.file, s )                            # write a line to the current file.
+    end
+
+    method Push()
+        push( self.stack, self.name )                           # push a name
+        push( self.stack, self.file )                           # and file on the stack.
+    end
+
+    method Pop()
+        self.file := pop( self.stack )                          # pop a file
+        self.name := pop( self.stack )                          # and a name from the stack.
+    end
+
+
+
+
+                          - 103 -                           
+
+
+
+    method Open( n )                                            # Open() opens a new file.
+        local q
+        if type(n) == "list" then                               # if we get a list of names, 
+        {
+            while q := pull(n) do self$Open(q)                  # open them all
+            return                                              # and return.
+        }
+        if \self.file                                           # if we have a file currently
+            then self$Push()                                    # put it on the stack.
+        if n == "-" then                                          # if we're opening the standard file
+        {
+            if self.direction == "in"                             # if this is an input director
+                then self.name := "stdin" & self.file := &input   # then set the name to "stdin" and the file to stdin
+                else self.name := "stdout" & self.file := &output # otherwise do stdout;
+            return                                                # and return.
+        }
+        q := ((self.direction == "in" & "r") | "c")             # do "r" if input, "c" if output.
+        if self.file := open( n, q ) then {                     # if we open the file
+            self.name := n                                      # set the name to the name of the file we just opened
+            return                                              # and return.
+        } else {                                                # if we can't open the file
+            self$Pop()                                          # go back to the one on the stack,
+            self$Error("couldn't open "||self.name)             # give and error message,
+            fail                                                # and fail.
+        }
+    end
+
+    method Close()                                              # to close a file
+        if *self.stack > 0 then {                               # if there's anything on the stack
+            close(self.file)                                    # close the current one,
+            self$Pop()                                          # pop to the one on the top of the stack,
+            return                                              # and return.
+        }
+        else                                                    # otherwise
+        {
+            self$Error("nothing in stack")                      # send a message
+            fail                                                # and fail.
+        }
+    end
+
+    method Error(msg)                                           # write an error message to stderr.
+        write(&errout,"Director ("||\self.name||"): " || msg )  
+    end
+
+    method Name()                      
+        return self.name                                        # return the name of the current file.
+    end
+
+initially                                                       # when the object is created
+    if /self.direction then                                     # if the direction is unspecified
+        self$Error("direction unspecified") & fail              # say so and fail.
+    self.stack := list()                                        # otherwise, make a stack
+    self$Open(\self.name|"-")                                   # and open the specified file name, or the default file.
+end
+
+
+
+
+
+
+
+
+                          - 104 -                           
+
+
+
+
+################################################################
+# misc.iol
+#
+# this file contains some miscellaneous procedures.
+#
+procedure balanced( x )                                         # balanced() tells if the list is a completely balanced list
+  if lbal(x) = *x                                               # bracket-wise.
+    then return
+    else fail
+end
+
+procedure lbal( l )                                             # lbal() finds the position of the balanced bracket from the
+    local angle, paren, squar, curly, pos                       # leftmost thing.
+    paren := squar := curly := angle := 0                       # initialize all the counters.
+    every pos := 1 to *l do                                     # start at the left position
+    {
+        case l[pos] of                                          # check what kind of bracket it might be
+        {
+            "<": angle +:= 1  ;  ">": angle -:= 1               # and increment the appropriate counter.
+            "(": paren +:= 1  ;  ")": paren -:= 1
+            "[": squar +:= 1  ;  "]": squar -:= 1
+            "{": curly +:= 1  ;  "}": curly -:= 1
+        }
+        if (angle = paren = squar = curly = 0)                  # when all the counter are zero then we've found the position.
+            then return pos
+    }
+    fail                                                        # not enough right-side things were in the string.
+end
+
+procedure toke( line, punctuation )                             # procedure toke() takes a string and generates all the 
+                                                                # words and punctuation marks.
+    local w, wchar
+    /punctuation := ''
+    wchar := (&ascii -- ' \t') -- punctuation                   # figure out what characters are left to be in words.
+
+    line ?                                                      # with the string
+      while tab(upto(wchar++punctuation)) do {                  # move upto a word character or a puntuation mark;
+       w := ( tab(any(punctuation)) |                           # get the string containing either one punctuation mark or
+              tab(many(wchar))                                  # a lot of word characters.
+            )
+       suspend w                                                # suspend with the string.
+    }
+end
+
+procedure toke_list( s, punctuation )                           # procedure toke_list() make a list of all the words and
+    local tl                                                    # punctuation marks in an input string.
+    tl := []                                                    # start a list.
+    every put( tl, toke(s, punctuation) )                       # get every toke and put it in the list.
+    return tl                                                   # return the list.
+end
+
+
+
+
+
+
+
+
+
+
+
+                          - 105 -                           
+
+

@@ -1,0 +1,33 @@
+grammar.u1  :  grammar.icn
+	icont -c -s grammar.icn
+
+lexicon.u1  :  lexicon.icn
+	icont -c -s lexicon.icn
+
+makeMakefile.u1  :  makeMakefile.icn
+	icont -c -s makeMakefile.icn
+
+misc.u1  :  misc.icn
+	icont -c -s misc.icn
+
+model.u1  :  model.icn
+	icont -c -s model.icn
+
+p.u1  :  p.icn
+	icont -c -s p.icn
+
+parser.u1  :  parser.icn
+	icont -c -s parser.icn
+
+t1.u1  :  t1.icn
+	icont -c -s t1.icn
+
+translator.u1  :  translator.icn
+	icont -c -s translator.icn
+
+types.u1  :  types.icn
+	icont -c -s types.icn
+
+alldone  :  grammar.u1 lexicon.u1 makeMakefile.u1 misc.u1 model.u1 p.u1 parser.u1 t1.u1 translator.u1 types.u1
+	touch alldone
+

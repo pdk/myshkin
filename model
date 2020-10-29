@@ -1,0 +1,36 @@
+new model simple-world
+
+person' {<g true> <m true> <fr true> <j true>}
+man' {<g true> <fr true> <j true>}
+woman' {<m true>}
+
+cat' {<fl true>  <p true>}
+dog' {<fi true> <gr true>}
+rat' {<rat-1 true>  <rat-2 true>}
+frog' {<frog-1 true> <frog-2 true>}
+duck' {<duck-1 true> <duck-2 true>}
+fish' {<fish-1 true> <fish-2 true> <fish-3 true> <fish-4 true>}
+ball' {<ball-1 true>}
+
+die' {<fe true>   <g true> <m true> <fish-1 true> <fish-4 true>}
+fall' {<fi true> <p true>}
+
+kill' {<fr m true> <fl rat-1 true> <p rat-2 true> <g fish-1 true> <g fish-4 true> }
+kiss' {<j m true>}
+see' {<fl g true> <fl fe true> <p g true> <p fe true> <g fl true> <fe p true>}
+eat' {<fl fe true> <p g true> <g fish-1 true> <g fish-4 true>}
+shoot' {<fr m true>}
+catch' {<g fish-1 true> <g fish-2 true> <m ball-1 true> <g fish-4 true>}
+
+give' {<j fl m true> <fr p m true>}
+show' {<fr fi gr>}
+throw' {<g fish-2 back true> <j ball-1 m true>}
+
+say'   { <m (woman' g) true> <m (frog' fr) true> <g (think' m (frog' fr)) true> }
+think' { <m (woman' g) true> <m (frog' fr) false> }
+
+
+fat' {<j true> <fl true> <p true> <fish-1 true>}
+small' {<fish-2 true>}
+
+

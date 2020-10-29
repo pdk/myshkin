@@ -1,0 +1,46 @@
+new lexicon English
+
+name: sherman sh; wendel we; mickey mic; minnie min   # cats
+name: fluff flu     # animal
+
+
+aux-be: was be-pass; were be-pass; 
+
+cop: is be'; are be'; were be'; was be'
+adj: fat fat'; thin thin'
+
+v1: died die'; die die'; dies die'
+v1: fall fall'; fell fall'; falls fall'
+
+v2: kill kill'; killed kill'; 
+v2: kissed kiss'; kiss kiss';
+v2: sees see'; saw see'; 
+v2: ate eat'; eats eat'; eat eat'; eaten eat'
+v2: shot shoot'; shoot shoot'; shoots shoot'
+v2: catch catch'; catches catch'; caught catch'
+
+v3: gave give'; given give'; gives give'; give give';
+v3: show show'; shows show'; showed show'; shown show';
+v3: throw throw'; throws throw'; threw throw'; thrown throw'
+
+vs: says say'; say say'; said say'
+vs: thinks think'; think think'; thought think'
+
+p: to to'; from from'
+prep: back back;
+
+det: some E; every A; most M; one One; two Two; three Three;
+det: a E; the E;
+
+n: duck duck'; ducks duck';
+n: fish fish';
+n: animal animal';
+n: cat cat'; cats cat';
+n: dog dog'; dogs dog';
+n: man man'; men man';
+n: woman woman'; women woman'
+n: rat rat'; rats rat'
+n: frog frog'; frogs frog'
+
+comp: that that'; who who'; which which'
+

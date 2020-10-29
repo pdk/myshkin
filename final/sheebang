@@ -1,0 +1,4421 @@
+
+
+
+
+
+
+Contents                                                          Page
+
+1.0  Myshkin . . . . . . . . . . . . . . . . . . . . . . . . . . .  2
+2.0  The Idol Programming Language . . . . . . . . . . . . . . . .  6
+3.0  The Parser  . . . . . . . . . . . . . . . . . . . . . . . . . 11
+     3.1  The Representation of the Lexicon  . . . . . . . . . . . 11
+     3.2  The Representation of the Grammar  . . . . . . . . . . . 13
+     3.3  Parse Tree Structure . . . . . . . . . . . . . . . . . . 14
+     3.4  The Parsing Algorithm  . . . . . . . . . . . . . . . . . 15
+     3.5  Left Recursion . . . . . . . . . . . . . . . . . . . . . 21
+     3.6  An Example Parse Trace . . . . . . . . . . . . . . . . . 22
+4.0  The Evaluator . . . . . . . . . . . . . . . . . . . . . . . . 25
+     4.1  Boolean Objects  . . . . . . . . . . . . . . . . . . . . 27
+     4.2  Atoms  . . . . . . . . . . . . . . . . . . . . . . . . . 27
+     4.3  Lists  . . . . . . . . . . . . . . . . . . . . . . . . . 27
+     4.4  Sets . . . . . . . . . . . . . . . . . . . . . . . . . . 28
+     4.5  Variables  . . . . . . . . . . . . . . . . . . . . . . . 28
+     4.6  The Current Model and Predicates . . . . . . . . . . . . 29
+     4.7  Expressions  . . . . . . . . . . . . . . . . . . . . . . 30
+          4.7.1  Predefined Function Expressions . . . . . . . . . 31
+          4.7.2  Quantifier Expressions  . . . . . . . . . . . . . 35
+          4.7.3  Predicate Expressions . . . . . . . . . . . . . . 37
+     4.8  Individual Indeterminate . . . . . . . . . . . . . . . . 39
+5.0  The Translator  . . . . . . . . . . . . . . . . . . . . . . . 41
+    5.1  Basic Grammar and Translations  . . . . . . . . . . . . . 42
+    5.2  Noun Phrases, Quantifiers and Storage . . . . . . . . . . 44
+    5.3  Verb Phrases  . . . . . . . . . . . . . . . . . . . . . . 48
+    5.4  Passives  . . . . . . . . . . . . . . . . . . . . . . . . 49
+    5.5  Topicalization  . . . . . . . . . . . . . . . . . . . . . 50
+    5.6  Relative Clauses and Storage  . . . . . . . . . . . . . . 55
+6.0  Interacting with Myshkin  . . . . . . . . . . . . . . . . . . 61
+    6.1  Model, Grammar, Lexicon and Cooper-Storage Modules  . . . 63
+    6.2  Input/Output  . . . . . . . . . . . . . . . . . . . . . . 65
+    6.3  Show Commands . . . . . . . . . . . . . . . . . . . . . . 66
+    6.4  A Couple of Stray Commands  . . . . . . . . . . . . . . . 68
+
+Sample Parse Trace . . . . . . . . . . . . . . . . . . . . . . . . 69
+
+Source Files:
+    myshkin.iol  . . . . . . . . . . . . . . . . . . . . . . . . . 71
+    module.iol . . . . . . . . . . . . . . . . . . . . . . . . . . 74
+    parser.iol . . . . . . . . . . . . . . . . . . . . . . . . . . 81
+    translator.iol . . . . . . . . . . . . . . . . . . . . . . . . 85
+    evaluator.iol  . . . . . . . . . . . . . . . . . . . . . . . . 89
+    file.iol . . . . . . . . . . . . . . . . . . . . . . . . . . .103
+    misc.iol . . . . . . . . . . . . . . . . . . . . . . . . . . .105
+
+References . . . . . . . . . . . . . . . . . . . . . . . . . . . .106
+
+
+
+
+
+
+
+
+
+                           - 1 -                            
+
+
+
+
+
+
+
+    1.0  __Myshkin__
+
+    The scope of this project was to create a computer
+
+program which would evaluate the at issue entailments of
+
+simple English sentences.  This work is based on what I
+
+learned in syntax and semantics classes.  The program is
+
+implemented in the Idol programming language.
+
+    Originally I proposed a three-module system, working
+
+together in a chain, each taking instruction from the user.
+
+The three modules were to be the parser, the translator and
+
+the evaluator.  The parser was to be given a context-free
+
+grammar and to generate parse trees from input sentences and
+
+the grammar.  The translator was to take the parse trees and
+
+with user-defined translation rules generate an expression
+
+of predicate calculus with quantifiers.  The evaluator was
+
+to take these expressions and evaluate them with regard to a
+
+model specified by the user.
+
+ CFG            translation rules      model
+  |                |                    |
+  V                V                    V
++----------+     +--------------+     +-------------+
+|  parser  | --> |  translator  | --> |  evaluator  | --> output
++----------+     +--------------+     +-------------+
+
+    The final structure of the program is based on this
+
+original plan, but changed in areas.  The context-free
+
+grammar has been divided into a context-free grammar and a
+
+lexicon.  This has two main benifits: the program is easier
+
+to use (the user can easily change the lexicon without
+
+dealing with the grammar); and lexical lookup is much more
+
+efficient.
+
+
+
+
+
+                           - 2 -                            
+
+
+
+
+
+
+    At the commencement of the project I had little idea how
+
+I was going to construct the translator (beside the fact
+
+that it would build the meaning of the whole from the
+
+meaning of the parts).  I thought that I would either do
+
+rule-by-rule translation, or type-driven translation, as
+
+done in "Generalized Phrase Structure Grammar" by Gazdar,
+
+Klein, Pullum and Sag.  Because doing a type-driven
+
+translation scheme would require more research (and possibly
+
+prove limited in the end) and I knew that a rule-by-rule
+
+approach would be simpler and account for at least as many
+
+phenomena as a type-driven approach, I chose to implement a
+
+rule-by-rule translation system.  The translation rules are
+
+entered with the grammar rules.  During the parsing the
+
+translation rules are put in the parse tree.  Then they are
+
+handed to the translator within the parse tree ready to be
+
+used to make a translation.  The translation rules are not
+
+fed directly to the translator, as in the original proposal.
+
+    The representation of the model underwent some major
+
+structural changes.  Originally I had thought to create a
+
+model based on existence in sets.  For example,
+
+    m1.a.    cat' { fluff puff sherman }
+
+might indicate that there is a set of cats containing
+
+Fluff, Puff and Sherman.  To determine if some entity were a
+
+cat the program would check to see if it was in the set.
+
+This changed to creating "functions", or sets of mappings.
+
+
+
+
+
+
+
+
+
+                           - 3 -                            
+
+
+
+
+
+
+    m2.a.    cat' { <fluff true> <puff true> 
+                    <sherman true> <mary false> }
+
+    (m2.a) is an example of how the model is currently
+
+represented.  The set "cat'" has mappings from entities to
+
+values.  Actually it is from lists to values.  The last item
+
+in the list is the mapped-to-item from the list of all but
+
+the last item.  ("<fluff>" maps to "true", and "<mary>" maps
+
+to "false".)  If a mapping cannot be found then the value is
+
+"nil". 
+
+    There are two advantages to this representation.  One is
+
+that we can model eating events with a set like this (m3.a).
+
+    m3.a.    eat' { <bob { <carrot-1 true> <potato-2 true> }>
+                    <bill { <carrot-2 true> }> }
+
+    Here we have "<bob>" mapping to a function that maps
+
+"<carrot-1>" to "true" and "<potato-2>" to "true".  (i3.a)
+
+is a function which maps to functions.  The other advantage
+
+is that we can have a partial model.  For instance, given
+
+the predicate (m2.a), the value of (m4.a) is neither "true"
+
+nor "false".
+
+    m4.a.    (cat' spot)
+
+    The value of (m4.a) is "nil", which is used to denote
+
+"unknown".
+
+    I chose to make the parser a recursive-descent parser
+
+because I wanted to be able to input a grammar, not have it
+
+hard-coded in the program.  I knew that a table driven
+
+recursive-descent parser was possible for me to do.  At this
+
+point I am curious as to how a bottom-up parser would have
+
+worked.
+
+
+
+
+
+                           - 4 -                            
+
+
+
+
+
+
+    Also, since I planned to assume that any input sentence
+
+would be grammatical, and that the input would be simple
+
+sentences (relatively speaking) I didn't worry about doing
+
+complex grammatical verification.  The grammar that I am
+
+currently using has no information about subject-verb
+
+agreement, for example.
+
+    A drawback of the current parser is that it cannot match
+
+null items in the input string.  This has to be considered
+
+when creating a grammar for the program to use, and makes
+
+creating  grammar with unbounded movements difficult.
+
+    This limitation is the basis of the programs ability to
+
+deal with left recursion.  Since null items may not be
+
+matched every branch in the tree must match at least one
+
+word in the input sentence.  A count is kept of how many
+
+words of the input a branch may match.  As the number of
+
+branches increases, the number of words that each branch may
+
+match decreases.  When the number of words available for a
+
+branch reaches zero, that branch is aborted.
+
+    The main points of this paper are the discussion of the
+
+parser, the evaluator, and the translator which appear in
+
+that order.  Before we begin that, there will be a brief
+
+description of the Idol programming language.  At the end is
+
+a section describing how to use Myshkin.  The source code of
+
+the program is included at the end.
+
+
+
+
+
+
+
+
+
+
+
+                           - 5 -                            
+
+
+
+
+
+
+
+    2.0  __The Idol Programming Language__
+
+    Idol [2] is "an Icon Derived Object Language".  It is an
+
+object oriented extension of the Icon programming language. [1]
+
+A brief introduction to the language will facilitate the
+
+readers understanding of Myshkin, and its algorithms.
+
+    I chose Icon for my development language for several
+
+reasons. It is a very high-level language with many
+
+string-processing tools.  Variables are not strongly typed.
+
+The most important reason is that it has built-in control
+
+structures for creating and using "generators".  Generators
+
+in Icon are procedures that can produces multiple values,
+
+instead of just one as with standard languages like C,
+
+Pascal, and Lisp.
+
+    Icon has no boolean type.  All expressions in the
+
+language may fail or succeed.  If an expression succeeds it
+
+may produce a value.  Consider the "if" control structure 
+
+in (i1.a).
+
+    i1.a.   if var2 == "tom" then 
+              write("it is tom")
+            else
+              write("it is not tom")
+
+    The expression 'var2 == "tom"' will either succeed or
+
+fail, depending on the value of "var2".  This expression
+
+produces the value "tom" if it succeeds and no value if it
+
+fails.  If this expression succeeds "it is tom" will be
+
+printed, and if it fails "it is not tom" will be printed.
+
+    In order to understand the algorithms of Myshkin it is
+
+essential to have an understanding of how generators work.
+
+
+
+
+
+                           - 6 -                            
+
+
+
+
+
+
+Consider the expression (i2.a).
+
+    i2.a.   find("th","the theme of his thesis")
+
+    (i2.a) is an Icon expression built on the generator
+
+"find".  It generates the locations of the first string in
+
+the second string: 1, 5, and 18.  Each time the "find"
+
+procedure locates a position where "th" occurs it suspends
+
+operation, generating the position.  The "every" control
+
+structure allows us to iterate on generator.  The expression
+
+(i3.a) 
+
+    i3.a.   every location := find("the", "the theme") do
+              write(location)
+
+will result in the output
+
+    i4.a.   1
+            5
+
+    The "every" control structure keeps resuming 
+
+    i5.a.   location := find("...
+
+in (i3.a) until it fails.  When "find" can find no more
+
+locations it fails.
+
+    A key thing is that the "find" procedure suspends and
+
+all its context is saved until it resumes.  When it resumes
+
+it continues from the point where is suspended.
+
+    Consider this user-defined generator (i6.a)
+
+    i6.a.   procedure gen4()
+              write("a")
+              suspend 1
+
+              write("b")
+              suspend 2
+            end
+
+    This procedure generates the values 1 and 2.  It also
+
+writes "a" and "b".  With the "every" control structure we
+
+
+
+
+
+                           - 7 -                            
+
+
+
+
+
+
+can write all these values.
+
+    i7.a.   every num := gen4() do
+              write(num)
+
+    The output of (i7.a) is (i8.a).
+
+    i8.a.   a
+            1
+            b
+            2
+
+    It executes like this: "gen4" is called by the "every"
+
+control structure and writes "a".  It suspends with the
+
+value 1.  The value of "gen4" is assigned to "num". ("num"
+
+gets the value 1.)  Then "num" (1) is written.  "gen4" is
+
+resumed by the "every".  Since it has just finished the
+
+"suspend 1" statement it goes on from there; "b" is written.
+
+Then "gen4" suspends with the value 2.  This value is
+
+assigned to "num" and is written.  Then "gen4" resumes
+
+again.  Since it has reached the end of the procedure it
+
+fails.  Since "gen4" fails the expression "num := gen4()"
+
+fails.  The "every" loop ends.
+
+    This idea is used extensively in Myshkin to deal with
+
+ambiguity.  In general, where an amibiguity may exist a
+
+generator is used to generate all the possibilities.
+
+    The only difference between Idol and Icon is that Idol
+
+has tools for defining objects with methods.  Different
+
+classes of objects may have different procedures which are
+
+named the same.  Consider (i9).
+
+
+
+
+
+
+
+
+
+
+
+                           - 8 -                            
+
+
+
+
+
+
+    i9.a.   class dog()
+              method speak()
+                write("bark!")
+              end
+            end
+    
+       b.   class frog()
+              method speak()
+                write("croak!")
+              end
+            end
+    
+       c.   class cat()
+              method speak()
+                write("meow!")
+              end
+            end
+
+    We can create objects from these declarations with the
+
+assignment operator, and try out the methods with the "$"
+
+operator.
+
+    i10.a.  fluff := cat()
+            spot := dog()
+            ferd := frog()
+    
+        b.  fluff$speak()
+            spot$speak()
+            ferd$speak()
+    
+    The output of (i10.a-b) is (i11.a).
+
+    i11.a.  meow!
+            bark!
+            croak!
+    
+    These object-oriented tools are most useful in the
+
+evaluator where every object can be evaluated, but depending
+
+on its type, may be evaluated differently.
+
+    Classes are like structure definitions in C, or record
+
+definitions in Pascal.  (The ones shown above have no
+
+fields.)  For example,
+
+
+
+
+
+
+
+
+
+                           - 9 -                            
+
+
+
+
+
+
+    i12.a.  class segment( voiced, constricted, labial )
+              method voice()
+                ...
+              end
+              method labialize()
+                ...
+              end
+            end
+
+    The fields "voiced", "constricted" and "labial" in
+
+(i12.a) are not accessable except to the methods of the
+
+class.  To make a field accessable to code outside the class
+
+definition, they are declared "public", as in (i13.a).
+
+    i13.a.  class segment( public voiced, 
+                           public constricted, 
+                           public labial )
+              ...
+            end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 10 -                           
+
+
+
+
+
+
+
+    3.0  __The Parser__
+
+    The parser uses a grammar and a lexicon to parse input
+
+sentences and generate tree structures with grammatical and
+
+semantic information.  There are four things to understand
+
+in the operation of the parser.  They are
+
+    1.  the representation of the lexicon,
+    2.  the representation of the grammar,
+    3.  the structure of the parse tree generated by 
+        the parser, and
+    4.  the algorithm for building parse trees from 
+        input sentences.
+
+    I will describe these four points in order, but first
+
+will give a brief overview.  At the end of this section are
+
+a description of how infinite left recursion is handled, and
+
+some explanation for the sample parse trace diagram which is
+
+included at the end.
+
+    The grammar is a context-free grammar with associated
+
+semantic composition rules.  The parse algorithm begins with
+
+a start symbol, such as "s" and searches all possible
+
+expansions.  It recursively builds trees containing both the
+
+information from the context-free rules and the translation
+
+rules.  At the leaves of the parse tree the semantic values
+
+of the lexical items take the place of translation rules.
+
+It generates all possible parses, thus handling ambiguities.
+
+The plausible trees are limited by the number of words in
+
+the input sentence.
+
+    3.1  __The Representation of the Lexicon__
+
+    The lexicon simply contains lexical items associated
+
+with categories and with semantic values.  For example,
+
+
+
+
+
+                           - 11 -                           
+
+
+
+
+
+
+    p1.a.   name:  mary m
+       b.   n:     duck n-duck'
+       c.   v1:    duck v-duck'
+    
+defines three lexical items.  The first is the name "Mary"
+
+which corresponds to the item "m" in the model.  The second
+
+and third define two categories and semantic values for the
+
+word "duck".  The first of these defines a lexical item of
+
+the "n" (noun) category with a semantic value "n-duck'".
+
+The second of these defines something of the "v1"
+
+(intransitive verb) category with a semantic value of
+
+"v-duck'".
+
+    Lexical items are kept in "word" structures.  This
+
+structure is declared in Idol as
+
+    p2.a.   class word( public category, 
+                        public w, 
+                        public trans )
+    
+The category is kept in the "category" field, the word form
+
+in the "w" field, and the semantic value in the "trans"
+
+field.  For instance, the name definition above would have a
+
+structure like
+
+    p3.a.   word( "name", "mary", "m" )
+
+"name" being the category, "mary" the form of the word, and
+
+"m" the semantic value.
+
+    A lexicon contains two tables.  These each contain links
+
+to lists of lexical items stored in "word" structures.  One
+
+of the tables is referenced by word forms, the other by
+
+category.  With the lexical definitions shown here, getting
+
+the list of words with the form "duck" by
+
+
+
+
+
+
+
+                           - 12 -                           
+
+
+
+
+
+
+    p4.a.   word_t["duck"]
+
+will produce the list
+
+    p5.a.   [word("n","duck","n-duck'"), 
+             word("v1","duck","v-duck'")
+            ]
+    
+This list contains two word structures, each with the word
+
+form "duck".
+
+    3.2  __The Representation of the Grammar__
+
+    The grammar contains context free rules with associated
+
+semantic composition rules.  For example,
+
+    p6.a.  s     -> np vp      => (2 1)
+       b.  np    -> det n-bar  => ! 1 (gamma x 
+                                    (1 &var (2 &var) x))
+       c.  n-bar -> n          => (gamma x (1 x))
+       d.  vp    -> v1         => (gamma x (1 x))
+       e.  vp    -> v2 np      => (gamma x (1 x 2))
+
+    Each of the grammar rules has three major parts: the
+
+left-hand side, the right-hand side, and the semantic
+
+composition rule.  The left-hand side and the right-hand
+
+side are separated by a "->".  The semantic composition rule
+
+follows a "=>".  All three parts must be present for the
+
+rule to be accepted by the program.  The left-hand side and
+
+the right-hand side are relevant for the parser.  The
+
+translation rules will be discussed in the section on the
+
+translator.
+
+    A grammar is a table keyed by the left-hand side of
+
+these rules to produce lists of "rule" structures.  A "rule"
+
+structure contains the right-hand side and translation rule
+
+parts of the grammatical rule.  This structure is declared
+
+in Idol as (p7.a).
+
+
+
+
+
+
+                           - 13 -                           
+
+
+
+
+
+
+    p7.a.   class rule( public exp, public tran )
+
+    The "exp" part is the expansion of the left-hand side,
+
+i.e. the right-hand side.  The "tran" part is the
+
+translation rule.
+
+    There are lists associated with each symbol because
+
+there may be multiple rules with the same left-hand side.
+
+For example, in the example grammar (p6) there are two "vp"
+
+rules (p6.d-e).
+
+    The two parts of the "rule" structure are stored as
+
+lists of strings, each string being a word or punctuation
+
+mark.  Referencing the grammar with "vp" will produce
+
+    p8.a.   [rule(["v1"],      
+                  ["(","gamma","x",
+                   "(","1","x",")",")"]),
+             rule(["v2","np"], 
+                  ["(","gamma","x",
+                   "(","1","x","2",")",")"])
+            ]
+    
+This list has representations of the two "vp" rules
+
+in (p.6.d-e).
+
+    3.3 __Parse Tree Structure__
+
+    Parse trees are produced by the parser.  These are trees
+
+which contain node names, or categories from the grammatical
+
+rules used to generate the trees and the translation rules
+
+associated with the context-free rules.  At each node in the
+
+tree are three parts:
+
+    1.  a semantic translation rule,
+    2.  a node category from a grammar rule, and
+    3.  a list of child parse trees.
+    
+    Here is a graphical example of a parse tree for the
+
+sentence "Mary kissed George".
+
+
+
+
+
+                           - 14 -                           
+
+
+
+
+
+
+    p9.a.   Mary kissed George
+                   s        
+                (2 1)       
+             ______|______  
+             |           |
+             np          vp
+             1  (gamma x(1 x 2))
+             |        ___|____
+            name      |      |
+             m        v2     np
+             |       kiss'   1
+            mary      |      |
+                    kissed  name
+                             g
+                             |
+                           george
+
+    Consider the top "s" node.  It has a category ("s"), a
+
+semantic composition rule ("(2 1)"), and two daughter nodes.
+
+The daughters are in a list.
+
+    The parse trees are built from a 'p_tree' structure.
+
+This structure is defined, in Idol, as (p10.a)
+
+    p10.a.  class p_tree( public trans, 
+                          public cat, 
+                          public children )
+    
+    The "trans" part contains the semantic composition rule
+
+for the current node.  The "cat" part holds the category of
+
+the node.  The "children" part is a list of "p_trees", or
+
+strings in the case of lexical leaves.
+
+    3.4  __The Parsing Algorithm__
+
+    The parser is a recursive descent parser.  It begins
+
+with a start symbol and builds trees from the top down
+
+trying to match the lexical categories with words in the
+
+input sentence.  The recursion is limited by how many items
+
+are in the input sentence.  The parsing is done strictly
+
+from left to right; no right branches are attempted until
+
+
+
+
+
+
+                           - 15 -                           
+
+
+
+
+
+
+all branches leftwards have resulted in lexical matches.
+
+    Parsing a sentence takes place in the context of three
+
+things: a sentence, a goal symbol, and the current grammar.
+
+The parser generates all possible p_trees for the given
+
+sentence.  The goal symbol is the name of the node which
+
+should be at the top of the parse tree.  This is passed as a
+
+parameter to the interface procedure.  The current grammar
+
+is kept by the global variable "cur_g".
+
+    There are three levels to the parse algorithm.  The
+
+highest is the interface routine 'parse'.  The middle
+
+routine is the recursive descent parser, 'rd_parse'.  The
+
+lowest is the lexical matcher, 'parse_match'.
+
+    There are two global variables associated with the
+
+parsing algorithm.  One is 'p_subject', and the other is
+
+'p_pos'.  Only 'parse' and 'parse_match' interact with these
+
+variables.  'rd_parse' does not directly deal with them.
+
+    The interface routine, 'parse', initializes these
+
+variables before invoking 'rd_parse'.  'p_pos' holds the
+
+current position in the sentence throughout the parsing.  It
+
+is initialized to 1 (the first word) by 'parse'.
+
+    The input sentence is made into a list of words and
+
+punctuation marks from the input string and the list is
+
+stored in 'p_subject'.  For example,
+
+    p11.a.  "mary, george kissed."  
+
+becomes  
+
+    p11.b.  ["mary", ",", "george", "kissed", "."]
+
+
+
+
+
+
+
+                           - 16 -                           
+
+
+
+
+
+
+    The value of 'p_pos' indicates which item in the list is
+
+the current word.
+
+    All items in the list must be matched by an item in the
+
+lexicon, or by something in a grammar rule.  And conversely,
+
+every branch in the tree must end in a leaf with an item
+
+from the input sentence.  The parser cannot match null
+
+items.
+
+    Once 'parse' has done its two assignments, its main duty
+
+is done.  It passes the 'goal' symbol and the number of
+
+items to be matched (the length of 'p_subject') to
+
+'rd_parse'.  'parse' generates as its results everything
+
+that 'rd_parse' generates.
+
+    The general process of the recursion of 'rd_parse' is
+
+that expansions are made and left branches tried until a
+
+lexical match is made.  Then the recursions suspend,
+
+generating subtrees from the bottom up.  A branch is
+
+expanded after all branches to its left have been completely
+
+explored and have made lexical matches.  The rightmost
+
+suspended procedure is the one that resumes at any time and
+
+the process backtracks leftward until a new expansion can be
+
+tried going right.  This is to say that after a tree has
+
+been generated, the rightmost branches are trimmed off until
+
+there is a new way to build a tree.
+
+    'rd_parse' can be given a 'goal' parameter of two types:
+
+a list, or a string.  'rd_parse' with a string type 'goal'
+
+will produce only p_tree structures, and with a list type
+
+'goal' will produce only lists of p_tree structures.
+
+
+
+
+
+                           - 17 -                           
+
+
+
+
+
+
+    With a list type 'goal' 'rd_parse' takes the left-most
+
+element and calls itself with that string as a 'goal'.
+
+(This will lead to a lexical match.)  After successfully
+
+getting a p_tree on the left it recurses on the right with
+
+the rest of the list.  If that recursion succeeds 'rd_parse'
+
+puts the p_tree made from the left-most element of 'goal' at
+
+the front of the list returned by the right recursion, then
+
+it suspends, generating the list that it constructed.  When
+
+the procedure resumes, it resumes the call that generated
+
+the list of right subtrees.  When the call to the right
+
+fails to generate any more, the left recursion is resumed,
+
+and the process begins again.  When the left explorations
+
+quit generating results, the procedure fails.
+
+    With a string type 'goal' 'rd_parse' gets all the
+
+expansions for it and recurses with every one of these lists
+
+as 'goal's.  This drives the process just described above.
+
+After it tries all the expansions, it attempts to make a
+
+lexical match, by calling 'parse_match' with the 'goal'.
+
+Since it makes both attempts, Myshkin is not restricted to
+
+"Chomsky Normal Form" grammars.
+
+    Consider the grammar rules (p12.a-b) and their
+
+representation (p13.a).
+
+    p12.a.  vp -> v2 np => (gamma x (1 x 2))
+        b.  vp -> v3 np => (gamma x (1 x 2 ?))
+    
+    p13.a.  [ rule( ["v2","np"], ["(","gamm...)",")"] ),
+              rule( ["v3","np"], ["(","gamm...)",")"] ) ]
+
+    With the 'goal' "vp" 'rd_parse' will fetch the list
+
+(p13.a) (assuming the grammar (p12)).  'rd_parse' will take
+
+
+
+
+
+                           - 18 -                           
+
+
+
+
+
+
+the expansion parts of the 'rule' structures, and will
+
+recurse with these lists.  If those recursions generate
+
+lists of subtrees then p_tree nodes will be built from the lists
+
+and from the information in the 'rule' structures.  For
+
+instance, if the list 'p-list' were generated from passing
+
+one of the expansion lists from (p13.a) to 'rd_parse' then
+
+the p_tree (p14.a) would be built and generated.
+
+    p14.a.  p_tree( ["(","gamm...)",")"], "vp", p-list )
+
+    The list of p_trees generated from the expansion becomes
+
+the list of children of the node.  The translation rule
+
+associated with the expansion is used as the translation
+
+rule for the p_tree node.  The 'goal' symbol becomes the
+
+node category label.
+
+    After generating all the possible p_trees by this
+
+method, 'rd_parse' calls 'parse_match' to try and make a
+
+lexical match in the input sentence.  The 'goal' is passed
+
+to 'parse_match' by 'rd_parse'.  The goal at this level is
+
+assumed to be a lexical category.  
+
+    'parse_match' is responsible for the position in the
+
+sentence, which is kept in the global variable 'p_pos'.  It
+
+gets the current word from 'p_subject' and then increments
+
+'p_pos'.  For each of the lexical matches made the
+
+procedure suspends, generating a p_tree made from the
+
+lexical item matched.  When all lexical matches are complete
+
+(this may occur at immediately, or after one or more
+
+suspensions), 'p_pos' is decremented.
+
+
+
+
+
+
+
+                           - 19 -                           
+
+
+
+
+
+
+    We will consider a small example for 'parse_match'.
+
+Suppose 'parse_match' is called with a 'goal' parameter of
+
+"n", 'p_pos' is 2, and 'p_subject' is
+
+    p15.a.   ["a", "duck", "died", "."]
+
+The current word is gotten from 'p_subject'.  It is item 2,
+
+"duck", in accordance with 'p_pos'.  After this 'p_pos' is
+
+incremented to 3.
+
+    To check for lexical matches 'parse_match' fetches from
+
+the current lexicon the list of 'word' structures with word
+
+forms of "duck".  The list is (p16.a).
+
+    p16.a.    [word("n","duck","n-duck'"), 
+               word("v1","duck","v-duck'")]
+    
+    The next thing for 'parse_match' to do is check each
+
+item in the list to see if the 'goal' matches the 'category'
+
+of the word.  The first one does match.  The procedure
+
+suspends with the p_tree (p17.a)
+
+    p17.a.    p_tree("n-duck'","n",["duck"])
+
+as its value.  When the procedure resumes the second 'word'
+
+is checked.  Since the category does not match, it is not
+
+used.  Now that all items in the 'word' list have been
+
+checked 'p_pos' is decremented back to 2 and the procedure
+
+fails indicating that no more matches are available.
+
+    The reason for incrementing and decrementing 'p_pos' in
+
+this way is that while parse_match is suspended the parser
+
+continues processing rightwards from the current word.  To
+
+be in the situation presupposed for this small example,
+
+'parse_match' will have been previously called and will have
+
+
+
+
+
+
+                           - 20 -                           
+
+
+
+
+
+
+matched "a" (the first item in 'p_subject').  While the
+
+events in the example occur the call of 'parse_match' that
+
+matched "a" will remain suspended.  After the completion of
+
+the example (after 'parse_match("duck")' fails) that
+
+previous call to 'parse_match' will resume to make a new
+
+match or to decrement 'p_pos' back to 1.
+
+    'parse_match' will grant matches between 'goal' and
+
+items in the input sentence when there is no lexical entry
+
+of that form.  This allows things to be matched from the
+
+grammatical rule.  For instance, a period (".") may appear
+
+in a grammatical rule and be matched in the sentence,
+
+provided there are no words with the form "." in the
+
+lexicon.  A match of this kind will generate a p_tree with
+
+an empty translation, and the category and the leaf will be
+
+the 'goal'.  For example, matching a goal of "." will
+
+produce (p18.a).
+
+    p18.a.    p_tree( "", ".", ["."] )
+
+This is essentially a meaningless node, but this action has
+
+two implications.  By being matched by 'parse_match' it will
+
+have the effect of incrementing the current position, so
+
+that parsing can continue moving rightward.  Generating the
+
+p_tree maintains the type of the 'parse_match' procedure.
+
+    3.5  __Left Recursion__
+
+    'rd_parse' tracks how many items may be matched by each
+
+recursion.  This is done with the second parameter
+
+'target_length'.  In a particular call of 'rd_parse' where
+
+the goal is a list of n items, the recursion on the left can
+
+
+
+
+
+                           - 21 -                           
+
+
+
+
+
+
+match no more than 'target_length' minus one less than n,
+
+and the call on the right may match no more than
+
+'target_length' minus 1.  For instance, if the first call of
+
+'rd_parse' is with a 'goal' of "s" and a 'target_length' of
+
+5 (i.e. there are 5 items in 'p_subject'), and an expansion
+
+    p19.a.    ["np", "vp", "."]
+
+of three items is to be tried, then the recursion for "np"
+
+will have a 'target_length' of 3.  For instance if the "np"
+
+branch were to match 4 items that would leave 1 item left
+
+for "vp" and "." to match.  Since every branch must match at
+
+least one lexical item for the "np" branch to match 4 would
+
+lead to an incomplete parse.
+
+    When a call to 'rd_parse' is made with a 'target_length'
+
+of zero, it fails.  When 'target_length' gets to zero this
+
+means that there are too few items in 'p_subject' to match
+
+all the branches in the tree.
+
+    3.6  __An Example Parse Trace__
+
+    Included in this paper is an example parse trace.
+
+Because of complexity a completely unrealistic grammar has
+
+been used for the trace example.  This is shown in (p16).
+
+The lexicon is (p17).  The example sentence and p_tree are
+
+shown in (p18).
+
+    p16.a.    s -> name verb .       => (2 1)
+        b.    s -> name verb name .  => (2 1 3)
+    
+    p17.a.    name: george g; mary m
+        b.    verb: kissed kiss'; sighed sigh'
+    
+
+
+
+
+
+
+
+
+                           - 22 -                           
+
+
+
+
+
+
+    p18.a.    George sighed.
+        b.           s
+                  (2 1)
+              _______|_______
+              |       |     |
+             name    verb   .
+              g      sigh'  |
+              |       |     .
+            george  sighed
+
+[Please refer to the barred paper for the trace diagram.]
+
+    Substatements of procedures are indented.  Because of
+
+the sequence of procedures suspending and resuming, all
+
+parts of a call to a procedure may not be contiguous in the
+
+diagram.  This is indicated by the line number of the first
+
+invocation being stated with the resumption.  For instance
+
+on line 48 the resumption is of the call to 'rd_parse' that
+
+first appears on line 15 and suspended on line 34.
+
+    One successful parse generates the p_tree (p17.a).  The
+
+interface procedure 'parse' generates this tree at lines
+
+41-44 in the parse diagram.
+
+    At the end (line 78), 'parse' fails indicating that no
+
+more parses can be constructed.
+
+    There are a few distinct things to track in this trace:
+
+the expansion and reduction of goals through the recursion;
+
+the reduction of 'target_length' through the recursion; and
+
+how 'p_pos' is incremented and decremented.
+
+    The processes of 'parse_match' are shown to go from left
+
+to right and then to backtrack from right to left.  Looking
+
+to the trace diagram we see that first "george" is matched
+
+(lines 9-13), then "sighed" (lines 18-22), then "."  (lines
+
+27-31).  The 'parse_match' that generated "." is resumed
+
+
+
+
+
+                           - 23 -                           
+
+
+
+
+
+
+first (line 51), then the one that generated "sighed" (line
+
+18) and then the one that generated "george" (line 64).
+
+    On examination of the trace diagram you will see that an
+
+invocation of 'rd_parse' may result in two recursive calls.
+
+The call at line 6 does the two calls at lines 7 and 15.
+
+The call at line 15 does the two calls at lines 16 and 24.
+
+The first of either of these pairs is an exploration of a
+
+left branch.  At line 7 the program is exploring "name" of
+
+["name", "verb", "."].  At line 16 it is exploring "verb" of
+
+["verb", "."].  The second call is what is left of those
+
+expansions after the left exploration has generated a p_tree
+
+result.
+
+    Another thing to notice is that where ever 'rd_parse'
+
+results in two recursive calls the second is resumed before
+
+the first.  This is backtracking from right to left.  This
+
+is what causes the proper resumption of the 'parse_match'
+
+procedures.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 24 -                           
+
+
+
+
+
+
+
+    4.0  __The Evaluator__
+
+    This discussion of the evaluator focuses on the types of
+
+objects and their syntax that the evaluator recognizes and
+
+can evaluate.
+
+    The evaluator works by handling seven types of objects.
+
+    e5.a.   Boolean
+       b.   Atom
+       c.   List
+       d.   Set
+
+       e.   Variable
+       f.   Predicate
+       g.   Expression
+
+    Objects of all these types may be evaluated.  Also, any
+
+object may be compared with any other for equality.
+
+Evaluating an object may produce a new object: evaluating a
+
+variable may produce an atom. The new object is "the value
+
+of" the object that was evaluated.  An object and its value
+
+are potentially distinct.
+
+    For the types (e5.a-d) the value of that type object
+
+will be of the same type: the value of an atom will be an
+
+atom, the value of a list will be a list, etc.  The later
+
+three types will most likely not have values of the same
+
+type.  The value of a variable or expression may be any
+
+type.  The value of a predicate will be a set.
+
+    There is a special atom which is the individual
+
+indeterminate.  It has the form "?".  It cannot be evaluated
+
+directly.  
+
+    We will begin with a general syntactic description.
+
+Then we will examine each of the types shown above in (e5)
+
+
+
+
+
+                           - 25 -                           
+
+
+
+
+
+
+in the order shown.  With the description of the predicates
+
+will come the representation of the model.  In the
+
+expression portion we will discuss logical functions,
+
+application of predicates, and the truth conditions of
+
+quantifiers.  Finally we will see the interpretation of the
+
+individual indeterminate.
+
+    The evaluator evaluates predicate calculus with
+
+quantifiers with a three-valued logic.  The syntax of the
+
+expressions within the evaluator is different than standard
+
+syntax for predicate calculus.  The syntax of the evaluator
+
+is basically that of Lisp.  The operators are prefix instead
+
+of infix.
+
+    e1.a.  true ^ false       becomes   (and true false)
+       b.  true v false       becomes   (or true false)
+       c.  true -> false      becomes   (impl true false)
+
+    Predicate expressions are formed with the predicate
+
+inside the parentheses.
+
+    e2.a.  cat'( s )          becomes   (cat' s)
+
+And quantifiers are inside parentheses, too.
+
+    e3.a.  Ex:cat'(x)[love'(m,x)]  
+
+becomes  
+
+    e4.b.  (E .x (cat' .x) (love' m .x))
+
+    Variables are marked with a period to simplify keeping
+
+them distinct from symbols denoting entities.  No commas are
+
+used.
+
+
+
+
+
+
+
+
+
+
+
+                           - 26 -                           
+
+
+
+
+    4.1  __Boolean Objects__
+
+    There are three objects of boolean type: "true", "false"
+
+and "nil".  "nil" is analogous to "unknown".  The value of a
+
+boolean object is itself.
+
+    4.2  __Atoms__
+
+    Atoms are used to denote entities.  An atom is a string.
+
+It may not begin with a period ("."), and it may not end
+
+with a prime mark ("'").  Some valid atoms are shown in
+
+(e6). 
+
+    e6.a.   a
+       b.   mary
+       c.   gluber-flack
+
+    (e7) shows items which are not valid atoms.
+
+    e7.a.   true
+       b.   nil
+       c.   .x
+       d.   .45
+       e.   cat'
+       f.   glack'
+
+    The value of an atom is itself.  
+
+    4.3  __Lists__
+
+    A list is an ordered sequence of valid objects enclosed
+
+with angled brackets.  Some valid lists are shown in (e8).
+
+    e8.a.   <mary carrot true>
+       b.   <.a .b carrot>
+       c.   <<mary> <fred> false>
+       d.   <>
+       e.   <erg gre carrot>
+       f.   <mary .b>
+       g.   <mary .c>
+       h.   <mary true>
+
+    The value of a list is a list of the values of the
+
+objects in the list.  For instance, suppose that the value
+
+of ".a" is "erg" and the value of ".b" is "gre" then the
+
+value of (e8.b) is (e8.e).
+
+
+
+
+
+                           - 27 -                           
+
+
+
+
+
+
+    Two lists are equal if they both have the same sequence
+
+of objects.  Two lists may have equal values, but not be
+
+equal.  For instance, suppose the value of ".b" is "true"
+
+and the value of ".c" is "true", then (e8.f) and (e8.g) have
+
+equal values, namely (e8.h), but are not equal.
+
+    4.4  __Sets__
+
+    A set is a collection of objects.  A set is formed by
+
+surrounding a collection of objects with curly brackets.
+
+Some valid sets are shown in (e9).
+
+    e9.a.   {fred wilma barney}
+       b.   {<fred true> <mary false>}
+       c.   {{fred} <fred> fred}
+       d.   {}
+       e.   {.a .b .c}
+       f.   {true false}
+
+    A set will not contain two objects which are equal.  The
+
+value of a set is a set containing the values of the objects
+
+in the set.  The values of (e9.a-d) are themselves, since
+
+the only objects they contain are objects whose values are
+
+themselves.  Suppose the values of the variables ".a", ".b"
+
+and ".c", in (e9.e) are "true", "true" and "false".  The
+
+value of (e9.e) will be (e9.f).
+
+    4.5  __Variables__
+
+    There are an unlimited number of objects of variable
+
+type.  A variable object is formed by a period and a string
+
+of characters.  Some valid variables are shown in (e10).
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 28 -                           
+
+
+
+
+
+
+    e10.a.   .a
+        b.   .a87
+        c.   .b9
+        d.   .a-very-long-variable-name-9999
+        e.   .23
+
+    A variable can be assigned values of any type.  The
+
+expression (e12.a)
+
+    e12.a.  (set .b9 true)
+
+sets the value of the variable ".b9" to "true" (of boolean
+
+type).  If a variable has not been set, that is, if it has
+
+no value, evaluating it will cause an error, and evaluation
+
+will stop.
+
+    e13.a.  (cat' .b9)
+
+    If the variable ".b9" has no value then evaluating the
+
+expression (e13.a) will cause an error and the evaluation
+
+will stop, producing no value.  This will stop evaluation of
+
+expressions where a variable is out of the scope of its
+
+quantifier.
+
+    4.6  __The Current Model and Predicates__
+
+    Predicates are strings which end with "'".  Shown in
+
+(e14) are some predicates.
+
+    e14.a.   cat'
+        b.   dog'
+        c.   fried'
+
+    Predicates are the primary link with a model.  Stored in
+
+the model are sets associated with predicates.  The value of
+
+a predicate is the set associated with it in the current
+
+model.  The value of a predicate should be a set made of
+
+lists of two or more parts.  For instance, the following
+
+statements create usable predicates in the current model:
+
+
+
+
+
+                           - 29 -                           
+
+
+
+
+
+
+    e15.a.   cat' {<fluff true> <puff true> 
+                   <gruff false> <mary false>}
+        b.   dog' {<gruff true> <spot true>}
+        c.   eat' {<mary carrot-23 true> 
+                   <gruff puff true>}
+
+    Issuing (e15.a-c) to the program will create three
+
+predicates in the current model.  
+
+    In addition to keeping the values of predicates the
+
+model keeps a set (an Icon set, not a Myshkin set)
+
+containing all the atoms mentioned in the predicates.  This
+
+is for when quantifiers are evaluated, all the entities in
+
+the model can be gotten.  This is done with the 'domain'
+
+method which generates all the atoms in this set.
+
+    4.7  __Expressions__
+
+    Expressions are formed with parentheses surrounding a
+
+sequence of two or more objects.  (e16) shows some
+
+expressions. 
+
+    e16.a.   (or true false)
+        b.   (not false)
+        c.   (set .x fluff)
+        d.   (reset .x)
+        e.   (and true true false)
+        f.   (cat' fluff)
+        g.   (cat' .f)
+        h.   ({<fluff true>} fluff)
+        i.   (E .f (cat' .f) (eat' .f roger-the-rat))
+
+    The first object in the sequence is the "function" and
+
+all other objects are "arguments".
+
+    There are three kinds of expressions: predefined
+
+function expressions, quantifier expressions and predicate
+
+expressions.  I'll describe them in that order.
+
+
+
+
+
+
+
+
+
+                           - 30 -                           
+
+
+
+
+    4.7.1  __Predefined Function Expressions__
+
+    The predefined functions fall into three categories:
+
+variable manipulators (e17.a-b), logical functions
+
+(e17.c-i), and the comparison operator (e17.j).
+
+    e17.a.   set
+        b.   reset
+                                                          .
+        c.   and    (also &, ^)
+        d.   or     (also v)
+        e.   xor    (also xv)
+        f.   impl   ("implication")
+        h.   bimpl  ("bi-implication")
+        i.   not    (also ~, !)
+                                                          .
+        j.   equal  (also =)
+
+
+    The variable manipulator functions "set" and "reset" are
+
+used to give variables values and take them away.  "set"
+
+gives a variable a new value.  The old values of a variable
+
+are kept on a stack.  "reset" changes the value of a
+
+variable back to the thing on the top of the stack.  A "set"
+
+expression must have two arguments.  The first must be a
+
+variable and the second may be any valid object.  A "reset"
+
+expression must have one argument which is a variable.
+
+    Here are some valid "set" and "reset" expressions:
+
+            Expression                Value of ".a"
+                                                          .
+    e18.a.  (set .a true)             true
+        b.  (set .a mary)             mary
+        c.  (set .a <cliff true>)     <cliff true>
+        d.  (reset .a)                mary
+        e.  (reset .a)                true
+        f.  (reset .a)                --undefined--
+
+
+    The evaluator implements a three-valued logic.  The
+
+three boolean values are "true", "false" and "nil".  "nil"
+
+is used to mean "unknown".
+
+
+
+
+
+
+                           - 31 -                           
+
+
+
+
+
+
+    All the logical operators, except "not", take two
+
+arguments.  "not" takes one argument.  If any of these
+
+functions are given the wrong number of arguments, or if an
+
+argument's value's type is not boolean then an error will be
+
+signaled and evaluation will halt.
+
+    The three-valued logic is defined on the basis of "nil"
+
+being equivilent to "unknown".  In cases where a value of
+
+"true" or "false" could be substituted for "nil" and the
+
+value of the expression not be changed, then that value will
+
+be produced.  For instance, in "and" if one argument is
+
+"false" then if the other argument were "true" or "false" it
+
+would make not difference.  The value of "(and false nil)"
+
+is "false".  With "or" if either argument is "true" then the
+
+expression is "true".
+
+    (e19) is a chart showing values of ".p" and of the
+
+expression "(not .p)".  This "not" is equivilent to normal
+
+negation with the addition that "(not nil)" is "nil".
+
+             .p    (not .p)
+                                                          .
+    e19.a.  true   false
+        b.  false  true
+        c.  nil    nil
+
+    (e20) is a chart for "and".  The value of an "and"
+
+expression is "true" if both arguments are "true".  The
+
+value is "false" when either argument is "false".
+
+Otherwise, the value is "nil".
+
+
+
+
+
+
+
+
+
+
+
+                           - 32 -                           
+
+
+
+
+
+
+             .p    .q       (and .p .q)
+                                                          .
+    e20.a.  true   true     true
+        b.  true   false    false
+        c.  true   nil      nil
+        d.  false  true     false
+        e.  false  false    false
+        f.  false  nil      false
+        g.  nil    true     nil
+        h.  nil    false    false
+        i.  nil    nil      nil
+
+    (e21) is the chart for "or".  The value of an "or"
+
+expression is "true" if either argument is "true".
+
+Otherwise, the value is "nil" if either argument is "nil".
+
+Otherwise, the value is "false".  Therefore, the value of an
+
+"or" expression is "false" only if both arguments are
+
+"false".
+
+             .p    .q       (or .p .q)
+                                                          .
+    e21.a.  true   true     true
+        b.  true   false    true
+        c.  true   nil      true
+        d.  false  true     true
+        e.  false  false    false
+        f.  false  nil      nil
+        g.  nil    true     true
+        h.  nil    false    nil
+        i.  nil    nil      nil
+
+    (e22) is the chart for "xor" (exclusive or).  The value
+
+of an "xor" expression is "true" only if one argument is
+
+"true" and the other is "false".  The value is "nil" if
+
+either argument is "nil".  The value is "false" if both
+
+arguments are "true" or if both arguments are "false".
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 33 -                           
+
+
+
+
+
+
+             .p    .q       (xor .p .q)
+                                                          .
+    e22.a.  true   true     false
+        b.  true   false    true
+        c.  true   nil      nil
+        d.  false  true     true
+        e.  false  false    false
+        f.  false  nil      nil
+        g.  nil    true     nil
+        h.  nil    false    nil
+        i.  nil    nil      nil
+
+    (e23) is the chart for "impl" (logical implication).
+
+The value of an "impl" expression is "true" if the first
+
+argument is "false".  The value is "nil" if the first
+
+argument is "nil".  The value of an "impl" expression is the
+
+second argument if the first argument is "true".
+
+             .p    .q       (impl .p .q)
+                                                          .
+    e23.a.  true   true     true
+        b.  true   false    false
+        c.  true   nil      nil
+        d.  false  true     true
+        e.  false  false    true
+        f.  false  nil      true
+        g.  nil    true     nil
+        h.  nil    false    nil
+        i.  nil    nil      nil
+
+    (e24) is the chart for "bimpl" (bi-implication, if and
+
+only if).  The value of a "bimpl" expression is "true" if
+
+both arguments are "true" or if both arguments are "false".
+
+The value is "nil" if either argument is "nil".  Otherwise,
+
+the value is "false".
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 34 -                           
+
+
+
+
+
+
+             .p    .q       (bimpl .p .q)
+                                                          .
+    e24.a.  true   true     true
+        b.  true   false    false
+        c.  true   nil      nil
+        d.  false  true     false
+        e.  false  false    true
+        f.  false  nil      nil
+        g.  nil    true     nil
+        h.  nil    false    nil
+        i.  nil    nil      nil
+
+
+    4.7.2  __Quantifier Expressions__
+
+    All quantifier expressions have the form shown in (e25.a).
+
+    e25.a.    (quant var restriction scope)
+
+    The "quant" is a quantifier.  There are currently four
+
+available: "E", "A", "EU" and "M".  These are the
+
+existential ("E"), the universal ("A"), the unique
+
+existential ("EU") and "most" ("M").  The satisfaction
+
+conditions of each of these will be discussed shortly.
+
+    The "var" is any valid variable.  The "restriction" and
+
+"scope" should be either a boolean or an expression.  Here
+
+are some examples:
+
+    e26.a.   (E .x  (dog' .x)  (died' .x))
+        b.   (A .y  true  (alive' .y))
+
+    Recall that all the atoms mentioned in the definition of
+
+predicates are kept in the domain of the model.  The
+
+quantifiers work by getting those atoms from the model and
+
+setting the var to have the value of those atoms.  Each time
+
+this is done the values of the restriction and scope are
+
+checked.
+
+    The truth conditions of the quantifiers is based again
+
+on "nil" meaning "unknown".  In cases where there is enough
+
+
+
+
+
+                           - 35 -                           
+
+
+
+
+
+
+"true" or "false" evidence "true" or "false" will be the
+
+result, otherwise the value will be "nil".
+
+    An "E" expression's value is "true" if there is some
+
+assignment of var such that both the restriction and the
+
+scope are "true".  Otherwise the value is "nil" if (1) there
+
+is some assignment such that the restriction is "nil", or
+
+(2) the restriction is "true" and the scope is "nil".
+
+Otherwise the value is "false".
+
+    An "A" expression's value is true if for every
+
+assignment of var such that the restriction is "true" the
+
+scope is "true", provided that there is no assignment such
+
+that the restriction is "nil".  The value is "false" if
+
+there is an assignment such that the restriction is "true"
+
+and the scope is "false".  Otherwise the value is "nil".
+
+    An "EU" expression's value is "true" if there is exactly
+
+one assignment of var where both the restriction and the
+
+scope are "true", provided that there is no assignment such
+
+that (1) the restriction is "nil", or (2) the restriction is
+
+"true" and the scope is "nil".  If there is more or less
+
+than one assignment such that the restriction and the scope
+
+are "true", then the value is "false".  Otherwise the value
+
+is "nil" (in cases (1) and (2)) or "false" (when all
+
+assignments are such that the restriction is "false").
+
+    An "M" expression's value is based on the count of three
+
+alternatives.  For a particular evaluation of an "M"
+
+expression let (1) t be the number of assignments where the
+
+restriction is "true" and the scope is "true"; (2) f be the
+
+
+
+
+
+                           - 36 -                           
+
+
+
+
+
+
+number of assigments where the restriction is "true" and the
+
+scope is "false"; and (3) u be the number of assignments
+
+where (i) the restriction is "nil", or (ii) the restriction
+
+is "true" and the scope is "nil".  Given these counts, if
+
+then sum of t, f and u is zero then the value of the
+
+expression is "true".  (This is the case if the restriction
+
+was "false" for every assignment of var.)  If t is larger
+
+than the sum of f and u then the value is "true".  If f is
+
+larger than or equal to the sum of t and u then the value is
+
+"false".  Otherwise the value is "nil".
+
+    4.7.3  __Predicate Expressions__
+
+    An expression which is not one of the kinds of expressions
+
+described above is assumed to be a predicate expression.  To
+
+be a valid predicate expression the value of first item must
+
+be a set.  It may be a predicate (e27.a), a variable whose value is
+
+a set (e27.b), or just a set (e27.c).
+
+    e27.a.   (person' mary)
+        b.   (.zed mary)
+        c.   ({<mary true> <george false>} mary)
+
+    The things in the set should be lists with lengths of two or
+
+more.  The set is considered to be a "function" in
+
+mathematical terms.  It is a mapping from vectors of objects
+
+to objects.  Consider these lists:
+
+    e28.a.   <george true>
+        b.   <mary george false>
+        c.   <mary carrot-23 true>
+
+(e28.a) is a mapping from "<george>" to "true".  (e28.b) is
+
+a mapping from "<mary george>" to "false".  (e28.c) is a
+
+mapping from "<mary carrot-23>" to "true".
+
+
+
+
+
+                           - 37 -                           
+
+
+
+
+
+
+    The values of the arguments of the predicate expression
+
+are put into a list, or vector, and the set is searched for
+
+a mapping from that list to some object.  If no matching
+
+list is found the default, "nil", is the value.
+
+    Suppose we have a predicate formed from the lists in (e28).
+
+    e29.a.   foo'  { <george true> 
+                     <mary george false> 
+                     <mary carrot-23 true> }
+
+Then the value of (e30.a)
+
+    e30.a.   (foo' george)
+
+is "true", and the value of (e30.a)
+
+    e31.a.   (foo' mary george)
+
+is "false".
+
+    Consider this predicate:
+
+    e32.a.   eat' { <mary { <carrot-23 true> 
+                            <apple-2 true> }>
+                    <george { <carrot-22 false> 
+                              <apple-4 true>}> 
+                  }
+
+    This predicate has values which are functions.  The
+
+value of (e33.a) is (e33.b) and the value of (e34.a) is
+
+(e34.b).
+
+    e33.a.   (eat' mary)
+        b.   { <carrot-23 true> <apple-2 true> }
+
+    e34.a.   (eat' george)
+        b.   { <carrot-22 false> <apple-4 true> }
+
+    With the predicate (e32.a) we can evaluate (e35.a-b).
+
+    e35.a.   ((eat' mary)  carrot-23 )
+        b.   ((eat' george)  apple-4 )
+
+and get "true" as the value of these expressions.  Note
+
+that (e35.a-b) are different expressions than (e36.a-b).
+
+
+
+
+
+
+                           - 38 -                           
+
+
+
+
+
+
+    e36.a.   (eat' mary carrot-23)
+        b.   (eat' george apple-4)
+
+    Again: if a mapping cannot be found for the arguments,
+
+then the value of the expression is "nil" ("unknown") by
+
+default.
+
+    The user should beware that they not put more than one
+
+mapping from a single list as this is not checked for and
+
+the results will be unpredictable.
+
+    4.8  __Individual Indeterminate__
+
+    The individual indeterminate "?" is expanded to an
+
+existential expression during evaluation.
+
+    e37.a.   (eat' mary ?)
+        b.   (E .v true (eat' mary .v))
+
+    The expression (e37.a) is expanded to and replaced by
+
+(e37.b).  Since the restriction of this expression is "true"
+
+the only requirement for the whole expression to be true is
+
+that there exist some atom in the model's domain such that
+
+the scope is true when that atom is assigned to ".v".
+
+    Suppose the individual indeterminate was not expanded
+
+this way, but just matched "any atom".  Consider (e38).
+
+    e38.a.   dog' { <fluff false> <spot true> }
+        b.   (dog' ?)
+
+    We want the value of (e38.b) to be "true" with the
+
+definition of "dog'" in (e38.a).  If the individual
+
+indeterminate were to just match any atom, then the value of
+
+(e38.b) might be "false".  This is because the search for a
+
+match with "<?>" would match "<fluff>" and the result of
+
+this match would be to give the value of the expression as
+
+
+
+
+
+
+                           - 39 -                           
+
+
+
+
+
+
+"false".  The search with regards to "?" needs to be with
+
+the aim of finding "true", not just any answer.  This is why
+
+the individual indeterminate is expanded to an existential.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 40 -                           
+
+
+
+
+
+
+
+    5.0  __The Translator__
+
+    First we will look at the two basic operation for
+
+composing translations.  We will describe the semantic
+
+composition methods in regard to a simple grammar.  Then we
+
+will look at quantifiers and storage.  Verb phrases,
+
+passives, topicalization will follow.  Finally we will
+
+revisit quantifiers and storage with a discussion of
+
+relative clauses.
+
+    The translator works on p_trees created by the parser.
+
+The p_trees contain, as said before, the translation rules.
+
+The translator simply traverses the tree building
+
+translations for each node based on the translation rule at
+
+each node.
+
+    The translation of a node is built from the translations
+
+of its children.  The translations of children are included
+
+by numerical reference. To put the translation of the nth
+
+child of a node in the translation, the number n is put in
+
+the translation rule.  For instance, with the composition
+
+rule (t1.a)
+
+    t1.a.   ( 2 1 )
+
+the translation is two parentheses surrounding the
+
+translation of the second child followed by the translation
+
+of the first child.
+
+    Another method for combining translations is with gamma
+
+functions. Gamma functions are similar to lambda
+
+abstractions in lambda calculus.
+
+
+
+
+
+
+                           - 41 -                           
+
+
+
+
+
+
+    t2.a.    (gamma var (... var ...))
+       b.    ( (gamma var (... var ...))  exp )
+       c.    (... exp ...)
+
+    A gamma function is the form shown in (12.a).  When a
+
+gamma function is applied to an argument, as shown in (t2.b)
+
+it is reduced.  (t2.b) reduces to (t2.c).  The result of
+
+applying a gamma function to an expression is the second
+
+argument of the gamma with all instances of the first
+
+argument of the gamma replaced by the expression.
+
+    The difference between gamma functions and lambda
+
+functions is that only symbols which are the second item in
+
+a list where gamma is the first are considered to be
+
+variables.  Variable collisions are not avoided unless the
+
+variable appears in this position.  For instance, (t3.a) is
+
+reduced to (t3.b), but (t4.a) is reduced to (something like)
+
+(t4.b).
+
+    t3.a.    ((gamma x (equal y x)) y)
+       b.    (equal y y)
+    
+    t4.a.    ((gamma x (gamma y (y x)) y)
+       b.    (gamma y-2 (y-2 y))
+
+    In (t4.a-b) the "y"s in "(gamma y (y x))" are made
+
+unique to avoid variable collision.  This happens because
+
+"y" is bound by gamma.  In (t3.a) the "y" is not bound by a
+
+gamma and is not made unique.  When we discuss bringing
+
+quantifiers out of storage we will re-examine this.
+
+    5.1  __Basic Grammar and Translations__
+
+    To get a more comprehensive view of how translations are
+
+built we will examine (t5), a small portion of the grammar,
+
+(t6), a short lexicon, and (t7.a), the p_tree of "Jay kissed
+
+
+
+
+
+                           - 42 -                           
+
+
+
+
+
+
+Mary."
+
+    t5.a.   sp    -> s .       => 1
+       b.   s     -> np vp     => (2 1)
+       c.   np    -> name      => 1
+       d.   vp    -> v2 np     => (gamma x (1 x 2))
+    
+    t6.a.   name: jay j; mary m
+       b.   v2:   kissed kiss'
+    
+    t7.a.  Jay kissed Mary.   t4.b.   Jay kissed Mary.
+           sp                                    sp
+           1                                 (kiss' j m)
+       ____|_____                             ____|_____     
+       |        |                             |        |     
+       s        .                             s        .
+    (2 1)       |           ((gamma x(kiss' x m)) j)   |
+ ______|______  .                       ______|______  .     
+ |           |                          |           |        
+ np          vp                         np          vp       
+ 1   (gamma x(1 x 2))                   j  (gamma x(kiss' x m))
+ |        ___|____                      |        ___|____    
+name      |      |                     name      |      |    
+ j        v2     np                     j        v2     np   
+ |       kiss'   1                      |       kiss'   m    
+jay       |      |                     jay       |      |    
+        kissed  name                           kissed  name  
+                 m                                      m    
+                 |                                      |    
+                mary                                   mary  
+
+    The p_tree (t7.a) on the left shows what is produced by
+
+the parser.  The tree (t7.b) on the right illustrates how
+
+the translation is built.
+
+    At the lexical category nodes, the translation rules are
+
+the semantic values of the lexical items found in the input
+
+sentence.  The two "name" nodes have the translations "j"
+
+and "m" corresponding to "jay" and "mary".  The "v2" node
+
+has the translation "kiss'", which is the semantic value of
+
+"kissed".
+
+    Consider the translation rule shown in (t5.d) and for
+
+the "vp" node in (t7.a).  This rule says that the
+
+
+
+
+
+
+                           - 43 -                           
+
+
+
+
+
+
+translation of the "vp" node is a gamma function built from
+
+the translations of the first and second children of the
+
+"vp" node.  The "1" is replaced with "kiss'" (the
+
+translation of the "v2" node) and the "2" is replaced with
+
+"m" (the translation of the "np" "mary").  The translation
+
+is shown in (t7.b).
+
+    The translation of the "s" node is determined by the
+
+translation rule in (t5.b) and shown in (t7.a).  It is made
+
+by building an expression that applies the translation of
+
+the second child (the "vp" node) to the translation of the
+
+first child (the "np" node).  The "2" is replaced with the
+
+translation of the "vp" and the "1" is replaced with the
+
+translation of the "np".  The result is shown in (t7.b).
+
+    After gamma reduction we get the expression formed by
+
+replacing the "x" (the first argument of the gamma) with "j"
+
+(the argument to the gamma function) in the second argument
+
+of the gamma.  The result of that reduction is show as the
+
+translation of the "sp" node in the right tree.
+
+    The translation of the input sentence is the expression
+
+(t8.a).
+
+    t8.a.   (kiss' j m)
+
+    5.2 __Noun Phrases, Quantifiers and Storage__
+
+    The translator also handles quantifier storage and
+
+quantifying in.  Here I will only explain how the first
+
+version of the translator worked in this regard.  Later,
+
+during discussion of relative clauses I will examine the
+
+faults with the first version, and how the current version
+
+
+
+
+
+                           - 44 -                           
+
+
+
+
+
+
+works.
+
+    There are a few issues involved with handling
+
+quantifiers and their storage.  A new variable (of the
+
+evaluator's type) needs to be created when constructing a
+
+new quantifier.  There needs to be a way to put the variable
+
+into the quantifier expression.  There needs to be a place
+
+to put the quantifier until it is quantified in.  (t9.a) is
+
+a rule which triggers these actions.
+
+    t9.a.   np -> det n-bar => ! 1 (gamma x (1 &var (2 &var) x))
+       b.   n-bar -> adj n-bar => (gamma x (and (1 x) (2 x)))
+       c.   n-bar -> n         => (gamma x (1 x))
+
+    I use an exclamation mark as the first item in a
+
+translation rule to signal the translator that the
+
+expression being constructed should be stored as a
+
+quantifier.  When the translator sees the "!" it creates a
+
+new evaluator-type variable and gets the translation of the
+
+second item in the translation rule as the name of the
+
+quantifier.  Any instance of the word "&var" in the
+
+translation rule is replaced by the newly created variable
+
+during the normal building of the translation.  Once the
+
+translation is built the expression is put into a globally
+
+accessible list for storage, and the variable created is
+
+used as the translation of the node.
+
+    Consider the p_tree (t10.a) which uses rules (t9.a,c).
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 45 -                           
+
+
+
+
+
+
+    t10.a.  Every cat ate a rat.
+                                      sp
+                                      1
+                              ________|________
+                              |               |
+                              s               .
+                           (2 1)              |
+                 _____________|_____________  .
+                 |                         |
+                 np                        vp
+! 1(gamma x(1 &var(2 &var)x))    (gamma x(1 x 2))
+           ______|______        ___________|___________
+           |           |        |                     |
+          det        n-bar      v2                    np
+           A  (gamma x(1 x))  eat'  ! 1(gamma x(1 &var(2 &var)x))
+           |           |        |               ______|______
+         every         n       ate              |           |
+                      cat'                     det        n-bar
+                       |                        E  (gamma x(1 x))
+                      cat                       |           |
+                                                a           n
+                                                           rat'
+                                                            |
+                                                           rat
+
+    We will examine how the translation of the "a rat"
+
+constituent is built.  When the "!" is found a new variable
+
+is created, ".b", and the translation of the first child,
+
+the "det" node, is fetched as the name of the quantifier.
+
+"E" is the name.  The rest of the translation is built from
+
+the translations of the two children.  Again, the
+
+translation of the first child is "E".  The translation of
+
+the "n-bar" node is (t11.a).  Building the translation of the
+
+"np" node we get (t11.b), which gamma reduces to (t11.c).
+
+    t11.a.  (gamma x(rat' x))
+        b.  (gamma x (E .b ((gamma y (rat' y)) .b) x))
+        c.  (gamma x (E .b (rat' .b) x))
+
+    The gamma function (t11.c) is put in storage and the
+
+translation of this "np" node is the variable ".b".  Doing
+
+the translation of the whole tree results in (t12.a-c).
+
+
+
+
+
+
+                           - 46 -                           
+
+
+
+
+
+
+    t12.a.  (ate' .a .b)
+        b.  (gamma x (A .a (cat' .a) x))
+        c.  (gamma x (E .b (rat' .b) x))
+
+    (t12.a) is the translation of the "sp" node.  (t12.b-c)
+
+are in storage.
+
+    The operation of quantifying in is done by using the
+
+gamma functions which are in storage applied to the
+
+translation of the top node.  For example, applying (t12.b)
+
+to (t12.a) we get (t13.a) which reduces to (t13.b).
+
+Applying (t12.c) to (t13.b) we get, after reduction,
+
+(t13.c).
+
+    t13.a.  ( (gamma x (A .a (cat' .a) x)) (ate' .a .b) )
+    
+        b.  (A .a (cat' .a) (ate' .a .b))
+            "for all 'a', such that 'a' is a 'cat', 'a' ate 'b'"
+    
+        c.  (E .b (rat' .b) (A .a (cat' .a) (ate' .a .b)))
+            "there exists 'b', such that 'b' is a 'rat', where 
+             for all 'a', such that 'a' is a 'cat', 'a' ate 'b'"
+
+    Here we should stop a moment and reconsider the
+
+difference between gamma reductions and lambda reductions.
+
+Consider the reduction from (t13.a) to (t13.b).  If this were
+
+a lambda reduction instead of a gamma reduction the variable
+
+".a" (which appears within the argument of the gamma
+
+function) would be altered in the argument of the gamma to
+
+avoid a variable collision since ".a" is bound by the
+
+universal quantifier ("A").  That is, the lambda application
+
+(t14.a) is reduced to (t14.b), where the ".a" has been
+
+changed to avoid a variable collision.
+
+    t14.a.   ( (lambda x (A .a (cat' .a) x)) (ate' .a .b) )
+        b.   (A .z (cat' .z) (ate' .a .b))
+    
+
+
+
+
+
+
+                           - 47 -                           
+
+
+
+
+
+
+    In gamma reductions the only items checked for variable
+
+collision are the items which are bound by a gamma.  This is
+
+crucial to building translations, as can be seen in
+
+(t13.a-c).
+
+    Taking the two gamma functions (t12.b-c) out of storage
+
+and applying them in the other order results in the other
+
+reading of the input sentence "Every cat ate a rat." shown
+
+in (t15.a).
+
+    t15.a.  (A .a (cat' .a) (E .b (rat' .b) (ate .a .b)))
+            "for all 'a', such that 'a' is a 'cat', where 
+            there exists 'b', such that 'b' is a 'rat', 
+            'a' ate 'b'"
+
+    The quantifying in is handled by a permutation function
+
+which generates the expressions formed by applying the items
+
+in storage as I've just shown.  The function does this in
+
+every possible order.
+
+    5.3  __Verb Phrases__
+
+    The basic verb phrase grammar rules are shown in (t16),
+
+and the basic prepositional phrase rule is shown in (t17.a).
+
+    t16.a.  vp -> v1       => (gamma x (1 x))
+        b.  vp -> v2 np    => (gamma x (1 x 2))
+        c.  vp -> v3 np pp => (gamma x (1 x 2 3))
+    
+    t17.a.  pp -> p np     => 2
+
+    In (t16.b-c) the direct object becomes the second
+
+argument a predicate.  In (t16.c) the indirect object
+
+becomes the third argument.  (t18.b) is the translation of
+
+(t18.a), and similarly (t19.b) of (t19.a).
+
+    t18.a.  hit mary
+        b.  (gamma x (hit' x m))
+    
+
+
+
+
+
+
+                           - 48 -                           
+
+
+
+
+
+
+    t19.a.  give fluff to mary
+        b.  (gamma x (give' x f m))
+    
+    Consider (t20.a-b).
+    
+    t20.a.  Mary threw a ball to George.
+        b.  Mary threw a ball.
+    
+    In (t20.b) the indirect object has been omitted.  This
+
+construction is handled by rule (t21.a).
+
+    t21.a.  vp -> v3 np => (gamma x (1 x 2 ?))
+
+    The individual indeterminant takes the place of the
+
+missing indirect object.
+
+    Consider (t22.a).
+
+    t22.a.  Mary threw George a ball.
+
+    This is the form of (t20.a) after dative movement.  This
+
+is handled by (t23.a).
+
+    t23.a.  vp -> v3 np np => (gamma x (1 x 3 2))
+
+    Comparing (t23.a) to (t16.c) you will see that the roles
+
+of the second and third children of the "vp" node have been
+
+switched.  This is in accord with the change from (t20.a) to
+
+(t22.a). 
+
+    5.4  __Passives__
+
+    Consider (t24).
+
+    t24.a.  Mary was kissed by George.
+        b.  Mary was kissed.
+        c.  A ball was thrown to Mary by George.
+        d.  A ball was thrown by George to Mary.
+        e.  A ball was thrown to Mary.
+        f.  A ball was thrown by George.
+        g.  A ball was thrown.
+        h.  Mary was thrown a ball.
+        i.  Mary was thrown a ball by George.
+
+    The examples in (t24) are passive forms of what the
+
+grammar shown so far allows.  These forms are handled by the
+
+
+
+
+
+                           - 49 -                           
+
+
+
+
+
+
+rules in (t25-26).  The rule (t26.a) corresponds to the
+
+structure of (t24.a), (t26.b) to (t24.b), (t26.c) to
+
+(t24.c), etc.
+
+    t25.a.  vp -> aux-be vp-pass => 2
+    
+    t26.a.  vp-pass -> v2 byp    => (gamma x (1 2 x))
+        b.  vp-pass -> v2        => (gamma x (1 ? x))
+        c.  vp-pass -> v3 pp byp => (gamma x (1 3 x 2))
+        d.  vp-pass -> v3 byp pp => (gamma x (1 2 x 3))
+        e.  vp-pass -> v3 pp     => (gamma x (1 ? x 2))
+        f.  vp-pass -> v3 byp    => (gamma x (1 2 x ?))
+        g.  vp-pass -> v3        => (gamma x (1 ? x ?))
+        h.  vp-pass -> v3 np byp => (gamma x (1 3 2 x))
+        i.  vp-pass -> v3 np     => (gamma x (1 ? 2 x))
+    
+    In (a-g) the direct object has been moved to subject
+
+position.  This is shown in the rules (t26.a-g) where the
+
+variable of the gamma is in the second argument position.
+
+In (h-i) the indirect object has moved to the subject
+
+position after dative movement.  In (t26.h-i) the role of
+
+the subject is that of the role of an indirect object in the
+
+normal form.  If a by-phrase ("byp") is present then its
+
+translation takes the role that the subject would have in
+
+the un-passivized form.  See (t26.a,c,d,f,h).  If the
+
+by-phrase is not present then the individual indeterminate
+
+takes that role.  See (t26.b,e,g,i).  Where the indirect
+
+object has been omitted the individual indeterminate takes
+
+that position.  See (t26.f-g).
+
+    5.5  __Topicalization__
+
+    Consider (t27).
+
+    t27.a.  George, Mary saw.
+        b.  A rat, some duck chased.
+
+
+
+
+
+
+
+
+                           - 50 -                           
+
+
+
+
+
+
+    (t27.a,b) are two examples of topicalized sentences.
+
+Some "np" has been moved to the front of the sentence.
+
+There are two things to deal with in these cases: where did
+
+the "np" come from, and how do we get the translation of the
+
+"np" at the front into the position dictated by where the
+
+hole is?  These are objectives are met with "/np"
+
+categories, as in Generalized Phrase Structure Grammar. [3]
+
+    Besides creating the rule for the top of the structure,
+
+we make two types of changes to the rules we have to
+
+implement this.  The first is to create versions of all the
+
+rules that "pass along" the "/np".  That is we make rules
+
+such that if the left-hand side has a "/np" we put a "/np"
+
+on one of the symbols in the right-hand side.  This change
+
+allows trees to have chains of "/np" provided there is a
+
+rule for the top of the chain and a rule for the bottom of
+
+the chain.  The second change entails making new rules that
+
+produce gamma functions to put the extracted "np" back in
+
+its semantic place.
+
+    First we have the topicalization rule (t28.a).
+
+    t28.a.  s -> np , np vp/np => ( (4 3) 1 )
+
+    This is the top of the "/np" chain.  Here we presume
+
+that the "vp/np" will produce a gamma function that when
+
+applied to an argument (the subject) and reduced will
+
+produce a gamma function which we can apply to the
+
+topicalized "np".
+
+    Shown in (t29) are the rules for phrases where an "np"
+
+has been extracted.
+
+
+
+
+
+                           - 51 -                           
+
+
+
+
+
+
+t29.a.  s/np -> vp => 1
+    b.  vp/np -> v2          => (gamma y (gamma x (1 y x)))
+    c.  vp/np -> v3 np pp/np => (gamma y (gamma x (1 y 2 x)))
+    d.  vp/np -> v3 pp       => (gamma y (gamma x (1 y x 2)))
+    e.  vp/np -> v3          => (gamma y (gamma x (1 y x ?)))
+    f.  vp/np -> v3 np       => (gamma y (gamma x (1 y 2 x)))
+    g.  vp-pass/np -> v2 byp/np    => (gamma y (gamma x (1 x y)))
+    h.  vp-pass/np -> v3 byp/np    => (gamma y (gamma x (1 x y)))
+    i.  vp-pass/np -> v3 pp/np     => (gamma y (gamma x (1 ? y x)))
+    j.  vp-pass/np -> v3 pp/np byp => (gamma y (gamma x (1 3 y x)))
+    k.  vp-pass/np -> v3 pp byp/np => (gamma y (gamma x (1 x y 2)))
+    l.  vp-pass/np -> v3 byp/np pp => (gamma y (gamma x (1 x y 3)))
+    m.  vp-pass/np -> v3 byp pp/np => (gamma y (gamma x (1 2 y x)))
+    n.  vp-pass/np -> v3 byp       => (gamma y (gamma x (1 2 x y)))
+    o.  vp-pass/np -> v3           => (gamma y (gamma x (1 ? x y)))
+    p.  vp-pass/np -> v3 np byp/np => (gamma y (gamma x (1 x 2 y)))
+
+
+    The rules in (t29) are possibilities for the bottom of
+
+the chain.  They have translations which are gamma functions
+
+that when applied to an argument produce gamma functions.
+
+The outer gammas will do the work of the gammas in the
+
+original rules, that is place the translation of the subject
+
+of the clause.  The inner gammas are the new ones.  These
+
+place a translation in the place from which an "np" was
+
+taken.  The exception is (t29.a).  This rule just passes on
+
+the gamma function from the "vp" instead on applying it to
+
+the subject (which is absent in this rule).
+
+    (t30) shows a couple of support rules for (t29).
+
+t30.a.  pp/np  -> p  =>
+    b.  byp/np -> by =>
+
+    The translations of the rules in (t30) are null and are
+
+never called upon by any rule in (t29).
+
+    We have the rules which create chains of "/np" in (t31).
+
+
+
+
+
+
+
+
+
+
+                           - 52 -                           
+
+
+
+
+
+
+t31.a.  s/np     -> np/np vp     => (gamma a (2 (1 a)))
+    b.  s/np     -> np vp/np     => (2 1)
+    c.  vp/np    -> v2 np/np     => (gamma x (gamma a (1 x (2 a))))
+    d.  vp/np    -> v3 np/np pp  => (gamma x (gamma a (1 x (2 a) 3))
+    e.  vp/np    -> v3 np/np     => (gamma x (gamma a (1 x (2 a) ?))
+    f.  vp/np    -> v3 np/np np  => (gamma x (gamma a (1 x 3 (2 a)))
+    g.  vp/np    -> v3 np np/np  => (gamma x (gamma a (1 x (3 a) 2))
+    h.  vp/np    -> aux-be vp-pass/np => 2
+    i.  vp-pass/np -> v3 np/np byp => (gamma x (gamma a (1 3 (2 a) x))
+    j.  vp-pass/np -> v3 np/np     => (gamma x (gamma a (1 ? (2 a) x))
+
+    In these rules the "/np" is passed to a lower
+
+constituent.  The translation of these constituents will be
+
+gamma functions ready to place the extracted "np".  When the
+
+"/np" is passed to an noun phrase, to insure that the gamma
+
+functions produced are not stranded within the new
+
+expression, they are fed a new variable and that variable is
+
+used to make a new gamma function.  [These have not been
+
+tested.]  A verb phrase passed a "/np" will produce a gamma
+
+function that produces a gamma function.  These translations
+
+do not need to be re-abstracted.
+
+    (t32.b) is an example p_tree of the topicalized sentence
+
+(t32.a).  (t33.b) is a tree which illustrates how the
+
+translation is built in (t32.b).  The translation of
+
+(t32.a), with the quantifier brought in, is shown in
+
+(t34.a).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 53 -                           
+
+
+
+
+
+
+    t32.a.  Mary, George threw a cat to.
+        b.                   sp
+                             1
+                    _________|__________
+                    |                  |
+                    s                  .
+               ((4 3)1)                |
+     _______________|________________  .
+     |   |  |                       |
+     np  ,  np                    vp/np
+     1   |  1       (gamma y(gamma x(1 y 2 x)))
+     |   ,  |     __________________|___________________
+    name   name   |                     |              |
+     m      g     v3                    np           pp/np
+     |      |   throw'  ! 1(gamma x(1 &var(2 &var)x))  |
+    mary  george  |                _____|______        p
+                threw              |          |       to'
+                                  det       n-bar      |
+                                   E  (gamma x(1 x))   to
+                                   |          |
+                                   a          n
+                                             cat'
+                                              |
+                                             cat
+    
+    t33.a.  Mary, George threw a cat to.
+        b.                   sp
+                        (throw' g .a m)   
+                    _________|_____________________
+                    |                             |
+                    s                             .
+    (((gamma y(gamma x(throw' y .a x))) g) m)     |
+     _______________|________________             .
+     |   |  |                       |
+     np  ,  np                    vp/np
+     1   |  1       (gamma y(gamma x(throw' y .a x)))
+     |   ,  |     __________________|___________________
+    name   name   |                     |              |
+     m      g     v3                    np           pp/np
+     |      |   throw'   ! E(gamma x(E .a (cat' .a)x)) |
+    mary  george  |                _____|______        p
+                threw              |          |       to'
+                                  det       n-bar      |
+                                   E (gamma x(cat' x)) to
+                                   |          |
+                                   a          n
+                                             cat'
+                                              |
+                                             cat
+
+    t34.a.  (E .a (cat' .a) (throw' g .a m)) 
+
+
+
+
+
+
+
+                           - 54 -                           
+
+
+
+
+
+
+    The translation of the "np" "a cat" results in a
+
+variable, ".a", and the gamma function (t35.a) in storage.
+
+    t35.a.  (gamma x (E .a (cat' .a) x))
+
+    The translation of the "vp/np" node is (t36.a).  The
+
+translation of the "s" node is made by applying this, first,
+
+to the translation of the third child of the "s" node (i.e.
+
+the subject), and then the result of that is applied to the
+
+translation of the first child (i.e. the topicalized "np").
+
+This is the expression (t36.b).  This reduces to (t36.c).
+
+    t36.a.  (gamma y (gamma x (throw' y .a x)))
+        b.  (((gamma y (gamma x (throw' y .a x))) g) m)
+        c.  (throw' g .a m)
+    
+    This account needs to be extended to deal with embedded
+
+sentences.
+
+    5.6 __Relative Clauses and Storage__
+
+    At the beginning of this discussion of the translator
+
+and the grammar, you will recall, I mentioned that what was
+
+described there was the first version of the translator.
+
+That system could not properly handle issues introduced by
+
+relative clause constructions.
+
+    At first the quantifier storage was a globally
+
+accessable list and quantifying in took place only as the
+
+last step in the translation.  This changed to a system that
+
+includes the items in storage as a separate part of the
+
+translation, and the ability to do quantification at
+
+specified nodes.
+
+    The last alteration was to be able to specify nodes
+
+where there can be nothing in storage.
+
+
+
+
+
+                           - 55 -                           
+
+
+
+
+
+
+    To account for relative clauses requires the addition of
+
+two rules in the grammar.  They are shown in (t34).
+
+t37.a.  n-bar    -> n-bar compp/np => (gamma x (and (1 x) (2 x)))
+    b.  compp/np -> comp s/np   => 2
+
+    Consider (38).
+
+    t38.a.  Every cat that ate a rat died.
+        b.                        sp
+                                  1
+                           _______|________
+                           |              |
+                           s              .
+                        (2 1)             |
+                ___________|____________  .
+                |                      |
+                np                     vp
+! 1(gamma x(1 &var(2 &var)x))  (gamma x(1 x))
+       _________|_________             |
+       |                 |             v1
+      det              n-bar          die'
+       A  (gamma x(and(1 x)(2 x)))     |
+       |           ______|______      died
+     every         |           |
+                 n-bar      compp/np
+           (gamma x(1 x))      2
+                   |     ______|______
+                   n     |           |
+                  cat'  comp        s/np
+                   |    that'        1
+                  cat    |           |
+                        that         vp
+                            (gamma x(1 x 2))
+                           __________|___________
+                           |                    |
+                           v2                   np
+                          eat'  ! 1(gamma x(1 &var(2 &var)x))
+                           |               _____|______
+                          ate              |          |
+                                          det       n-bar
+                                           E  (gamma x(1 x))
+                                           |          |
+                                           a          n
+                                                     rat'
+                                                      |
+                                                     rat
+
+    With the first version of the translator we get the two
+
+translations (t39.a,b).
+
+
+
+
+
+
+                           - 56 -                           
+
+
+
+
+
+
+t39.a.  (E .f (rat' .f) (A .e (and (cat' .e) (eat' .e .f)) (die' .e)))
+    b.  (A .e (and (cat' .e) (eat' .e .f)) (E .f (rat' .f) (die' .e))) 
+    
+    In translation (t39.a) "a rat" has wider scope than
+
+"every cat".  "a rat" is within the relative clause of
+
+"every cat", "every cat that ate a rat".  It says that there
+
+is some particular rat such that for every cat that ate it
+
+the cat died.  This is not the prefered reading.
+
+    In translation (t39.b) we have different problem.  The
+
+variable ".f" in the expression with the "eat'" predicate is
+
+out of the scope of its quantifier ("(E .f (rat' .f)...").
+
+This is an expression error and will be found in the
+
+evaluation of the expression.
+
+    Neither of these translations is the one we want.  The
+
+correct translation of this sentence is (t40.a).
+
+t40.a.  (A .e (and (cat' .e) (E .f (rat' .f) (eat' .e .f))) (die' .e))
+
+    The reason that this was not produced as a translation
+
+is that the existential quantifier is within the restriction
+
+of the universal quantifier.  The way to do this is to allow
+
+the existential quantifier (in this case) to be part of the
+
+translation when the universal quantifier is built.  The
+
+quantifier of a relative clause needs to have the oportunity
+
+to be quantified in at or below the "n-bar" node of the
+
+relative clause.  Then it may become part of the restriction
+
+of the upper quantifier.
+
+    To do this sort of thing I added a place to keep a set
+
+of the categories where quantification will occur.  Because
+
+of this change the storage could no longer be globally
+
+
+
+
+
+
+                           - 57 -                           
+
+
+
+
+
+
+accessable, it needed to be part of the translation.  We
+
+don't want to bring in a quantifier at a node that does not
+
+dominate the node where the quantifier was created.  The
+
+translator now generates lists, where the first item is the
+
+translation and the rest of the list is the things that are
+
+in storage.
+
+    Because of this change any node may have multiple
+
+translations.  At any point there may be translations with
+
+things in storage as well as translations with quantifiers
+
+brought in.  In this program the nodes where quantifying in
+
+can take place are called cooper-nodes. [4][5]
+
+    Setting the cooper-node set to include "s" and "s/np"
+
+nodes we get these three translations:
+
+t41.a.  (E .d (rat' .d) (A .c (& (cat' .c) (eat' .c .d)) (die' .c))) 
+    b.  (A .c (& (cat' .c) (eat' .c .d)) (E .d (rat' .d) (die' .c))) 
+    c.  (A .c (& (cat' .c) ((E .d (rat' .d) 
+             (gamma x (eat' x .d))) .c)) (die' .c))
+
+    (t41.a-b) are the same as (t40.a-b) and the same
+
+complaints still hold against them.  The new translation
+
+(t41.c) also has a problem.  There is a gamma function which
+
+is irreducible.  It is the result of bringing in the lower
+
+quantifier at the "s/np" node as we directed.
+
+    t42.a.  (gamma x (E .d (rat' .d) x))
+        b.  (gamma x (ate' x .d))
+
+    At the "s/np" node (t42.a) is in storage and (t42.b) is
+
+the translation of the "vp" node beneath it.  Since "s/np"
+
+is a cooper-node the permutation function is called.  One
+
+translation is generated with (t42.a) left is storage to be
+
+brought in later.  Another is to apply the quantifier to the
+
+
+
+
+
+                           - 58 -                           
+
+
+
+
+
+
+translation (t42.b) of the "vp" node.  We have (t43.a) as a
+
+result, which reduces to (t43.b).
+
+t43.a.  ( (gamma y (E .d (rat' .d) y)) (gamma x (ate' x .d)) )
+    b.  (E .d (rat' .d) (gamma x (ate' x .d)))
+
+(t43.b) is used as a translation for the "s/np" node.  The
+
+problem is that when the quantifier is applied it is applied
+
+not to an expression, as is was at the top of the tree, but
+
+to a gamma function.
+
+    My solution is to find the expression within the gamma
+
+function, apply the quantifier to that and then re-build the
+
+gamma function.  This is done very simply.  When the
+
+permutation function is called to bring in quantifiers it
+
+checks to see if what it is applying the quantifier to is a
+
+gamma function.  If it is, it takes the gamma off and calls
+
+itself again with the second argument of the gamma.  With
+
+each thing that the recursively called permutation procedure
+
+generates the gamma function is rebuilt and generated as a
+
+translation.  The result is that the gammas are stripped
+
+off, the quantifier is applied to the expression inside, and
+
+then the gammas are put back on.  The preserves the type of
+
+the translation while the quantifiers are brought in.
+
+    Now, with this alteration we get three translations,
+
+shown in (t44).
+
+t44.a.  (E .f (rat' .f) (A .e (& (cat' .e) (eat' .e .f)) (die' .e)))
+    b.  (A .e (& (cat' .e) (eat' .e .f)) (E .f (rat' .f) (die' .e))) 
+    c.  (A .e (& (cat' .e) (E .f (rat' .f) (eat' .e .f))) (die' .e)) 
+
+    Again, the first two (t44.a-b) are wrong.  The third is
+
+the correct translation of the sentence.  The lower
+
+
+
+
+
+
+                           - 59 -                           
+
+
+
+
+
+
+quantifier is within the restricion of the higher and all
+
+the gammas are reduced.
+
+    Now the third change.  The fact that (t44.b) has a
+
+variable out of the scope of its quantifier will be handled
+
+by the evaluator.  We don't need to worry about that.  But
+
+(t44.a) is a valid expression, but is not a reading we want
+
+for the sentence.  The lower quantifier from the relative
+
+clause has wider scope than the higher quantifier.  This
+
+happens when the lower quantifier is left in storage and the
+
+permute function permutes it past the higher quantifier.
+
+This is fixed by having a list of nodes where a translation
+
+which has something in storage is ruled invalid.  All the
+
+quantifiers must have been brought out of storage at these
+
+nodes to be a valid translation.
+
+    With this final version the translation we get for
+
+(t38.a) is (t45.a).
+
+t45.a.  (A .i (& (cat' .i) (E .j (rat' .j) (eat' .i .j))) (die' .i)) 
+
+    Here we have the correct translation, and not the one
+
+with the wide scope for the existential.  An added bonus of
+
+the restriction is that the translation with the out-of-scope 
+
+variable is no longer produced.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 60 -                           
+
+
+
+
+
+
+
+    6.0 __Interacting with Myshkin__
+
+    Interacting with Myshkin is done by entering commands,
+
+rules, or items to be processed.  If a sentence is entered
+
+it will be parsed, translated and evaluated.  If a grammar
+
+rule is entered it will be put in the grammar.  Typing an
+
+expression results in it being evaluated.
+
+    Myshkin works line by line.  It first checks to see if
+
+the first word on the input line is a valid command, and if
+
+so executes the command.  If the first word of the line is
+
+not a recognizable command the line is passed to the grammar
+
+module, the lexicon module and the model module.  Each has a
+
+shot at interpreting the line.  If one of the modules uses
+
+it, then the program goes on to the next input line.  If
+
+none of the modules use it then an attempt is made to parse
+
+it as an input sentence.  If it is parsable then it's
+
+translated and the translation is evaluated.  Finally, the
+
+input line is passed directly to the evaluator.  The
+
+evaluator checks to see if it is a valid expression and if
+
+so evaluates it and shows the result.  It is unlikely that
+
+any line will be usable by more than one of these
+
+components, so usually only one of these things will happen.
+
+    There are several "show" commands to examine all parts
+
+of the program.  If a sentence is entered and the desired
+
+result is not generated the user may immediatly make a
+
+request for information and track down the missing link.
+
+    There are a few flags which control what parts of the
+
+parse-translate-evaluate series are shown.  A tree for each
+
+
+
+
+                           - 61 -                           
+
+
+
+
+
+
+parse and the expressions created by translation can be
+
+shown or not.
+
+    The user can redirect the input and output during the
+
+program.  A shell command can be executed at any time.  This
+
+can be handy in the development of a grammar.
+
+    The "status" command gives information about the general
+
+state of the program, as in (u1.b-l).
+
+    u1.a.   ? status
+       b.   grammar is        English
+       c.   lexicon is        English
+       d.   model is          simple-world
+       e.   cooper-storage is default
+       f.   input is          stdin
+       g.   output is         stdout
+       h.   goal is           ms
+       i.   parse-string is   off
+       j.   parse-tree is     on
+       k.   translation is    on
+       l.   preserve-type is  on
+       m.   ?
+
+    [In the examples, the question mark is the prompt and is
+
+not entered by the user.  I use it here to distinguish
+
+between commands entered by the user and output of Myshkin.]
+
+    (u1.b-e) displays the names of the current modules.
+
+This will be discussed in the next section.  (u1.f,g) show
+
+what the current input and output files are.  This will be
+
+discussed in the Input/Output section, below.  The goal, in
+
+(u1.h), determines where to start with an attempt to parse a
+
+sentence.  It is set with the "goal" command, as in (u2.a).
+
+    u2.a.   ? goal s
+
+    (u1.i-l), the last four items, show switchs.  Each can
+
+be on or off.  To set one just enter the switch name
+
+followed by "on" or "off", as in (u3.a).
+
+
+
+
+
+                           - 62 -                           
+
+
+
+
+
+
+    u3.a.   ? parse-tree off
+
+    The parse-string switch controls display of a string
+
+representation of the parse.  This string has none of the
+
+semantic information.  The parse-tree switch controls the
+
+display of the parse tree with grammatical and semantic
+
+information in a tree structure.  This is very useful for
+
+examining how the input is being parsed.  The translation
+
+switch controls the display of the translations made.  If
+
+entering sentences which are ambiguous, this is best "on".
+
+    The preserve-type flag controls whether or not
+
+type-preservation operations are done when quantifiers are
+
+brought in during translation.  There is no purpose in
+
+having it "off" except to show why it doesn't work that way.
+
+    6.1  __Model, Grammar, Lexicon and Cooper-Storage Modules__
+
+    Myshkin can hold multiple grammars, lexicons and models
+
+in memory.  There is always a current grammar, current
+
+lexicon and current model.  Every grammar, lexicon and model
+
+has a name.  When the program starts there is a grammar
+
+named "default", a lexicon named "default" and a model named
+
+"default".
+
+    The "select" command will change what is current.
+
+Suppose you've created an "English" grammar, and an
+
+"English" lexicon.  Issuing the command 
+
+    u4.a.   ? select English
+
+will cause both of those to become current.  The
+
+command 
+
+
+
+
+
+
+
+                           - 63 -                           
+
+
+
+
+
+
+    u5.a.   ? select default
+
+will make the startup grammar, lexicon and model
+
+current.
+
+    The "new" command creates new grammars, etc. For
+
+example,
+
+    u6.a.   ? new grammar English
+       b.   ? new lexicon French
+       c.   ? new model world-A
+
+will create a new grammar named "English".  The new grammar
+
+will be the current grammar until a new one is created, or
+
+an old one is selected.
+
+    If a new module is created with an old name the new
+
+module will supercede the old one and the old one will be
+
+destroyed.  This occurs only when the old and new modules
+
+are the same type.  That is a new grammar will supercede an
+
+old grammar, but not an old lexicon.  For instance, entering
+
+(u6.a) will make the current grammar "English" and if a
+
+grammar existed previously named "English" is will be
+
+destroyed and inaccessible.
+
+    There is also a thing called "cooper-storage" which
+
+holds parameters for the cooper-storage operations.  New
+
+places for keeping these parameters may be created with the
+
+"new" command, also.  And the select command affects this
+
+module.
+
+    The two things that the cooper-storage module maintains
+
+is the list of nodes where quantifying in happens and the
+
+list of nodes which are "restricted".  A "restricted" node
+
+generates translations with quantifiers in storage.  This is
+
+
+
+
+
+                           - 64 -                           
+
+
+
+
+
+
+discussed in the translator section.  To add nodes to either
+
+of these lists, use the commands demonstrated in (u7.a,b).
+
+    u7.a.   ? cooper-node  n-bar
+       b.   ? cooper-restrict  n-bar
+
+    This adds "n-bar" to each of the lists.  To reset this
+
+module use the "new" command.
+
+    6.2  __Input/Output__
+
+    As said above all input is handled line by line.  The
+
+exception to this is that if there is a backslash at the end
+
+of the line, then the next line will be concatenated to the
+
+one with the backslash.  The backslash is a line
+
+continuation marker.
+
+    Also, anything after a "#" is ignored.  This is the
+
+comment character.  It may appear anywhere on the line.  To
+
+use the commend character and the line continuation marker
+
+together put the comment marker after the line contiuation
+
+marker.  (u8.a) and (u8.b) are equivilent.
+
+    u8.a.   cat' { <fl true>    \  # fluff is a cat
+                   <p true>     \  # puff is a cat
+                 }
+       b.   cat' { <fl true> <p true> }
+
+    The "read" and "write" commands are used to redirect
+
+input and output to and from files.  Entering (u9.a)
+
+    u9.a.   ? read Grammar
+
+will cause the system to read the file "Grammar", and deal
+
+with the information there just as if it were entered
+
+directly.  Then control will return to the keyboard.
+
+    There are a couple commands that are handy to put in
+
+files that will be read this way.  "eof" tells Myshkin to
+
+
+
+
+
+                           - 65 -                           
+
+
+
+
+
+
+close the file and resume with its old input source.  The
+
+"new" command (discussed above) can be extremely handy at
+
+the top of the file.  The user can cycle between editing the
+
+file and reading it.  If the "new" command is at the top,
+
+then each time the file is read the appropriate module can
+
+be reset to a clean slate.  The "echo" command can be used
+
+in a file to give the user information about what is
+
+happening during the reading of the file.  The "echo"
+
+command simply writes to the current output whatever is on
+
+the rest of the line.
+
+    The "write" command will redirect the output to a file.
+
+    u10.a.  ? write newfile
+
+    Entering this command will cause a new file called
+
+"newfile" to be created and until the file is closed (with
+
+the "close" command) or a new file is opened with the
+
+"write" command.  If a new file is opened with a "write"
+
+command when it is closed the old output stream will again
+
+become the output stream.  Consider (u11).
+
+    u11.a.  ? write file-A     # open file-A
+        b.  ? echo blah blah   # "blah blah" in file-A
+        c.  ? write file-B     # open file-B
+        d.  ? echo gurgle      # "gurgle"  in file-B
+        e.  ? close            # close file-B. go back to file-A
+        f.  ? echo burp        # "burp" written to file-A
+        g.  ? close            # close file-A. go back to stdout
+        h.  ? echo slurp       # "slurp" will go to stdout
+        i.  slurp
+        j.  ?
+
+    6.3  __Show Commands__
+
+    There are five show commands:
+
+
+
+
+
+
+
+
+                           - 66 -                           
+
+
+
+
+
+
+    u12.a.  show-grammar
+        b.  show-lexicon
+        c.  show-model
+        d.  show-cooper
+        e.  show
+
+    Each can be entered with or without an argument.  If an
+
+argument is used then only items that match that argument
+
+will be shown.
+
+    u13.a.  ? show-grammar vp
+
+    (u13.a) will show all the "vp" rules in the grammar.  If
+
+no argument is given then all the information will be
+
+displayed.
+
+    u14.a.  ? show-lexicon
+
+(u14.a) will show everything in the lexicon.
+
+    The "show" command does all the other four.  If you just
+
+enter "show" then all the information in all the current
+
+modules will be displayed.  This is typically too much
+
+information to digest at once.  If you want to dump all the
+
+info to a file you can do (u15.a-c).
+
+    u15.a.  ? write dump-file
+        b.  ? show
+        c.  ? close
+
+    A more useful thing to do would be (u16.a-g).
+
+    u16.a.  ? write grammar-C     # open a file
+        b.  ? echo echo this is grammar-C
+        c.  ? echo new grammar-C
+        d.  ? show-grammar        # put the grammar in the file.
+        e.  ? close
+        f.  ? ! vi grammar-C      # go and edit the grammar.
+        g.  ? read grammar-C      # load the edited grammar.
+
+    With this the user can edit the current grammar.
+
+
+
+
+
+
+
+
+
+                           - 67 -                           
+
+
+
+
+    6.4  __A Couple of Stray Commands__
+
+    The "parse" command can be used to explicitly parse a
+
+sentence and not do any translation or evaluation.  The
+
+parse-string and parse-tree will be displayed as the flags
+
+determine.  The command "translate" is similar.  It will
+
+parse the sentence and translate it.  Again the flags
+
+control what is shown or not.  (u17) shows a couple of examples. 
+
+    u17.a.  ? parse the duck flew.
+        b.  ? translate george ate a fish.
+
+    The final command is "done" or "end".  This will stop
+
+the program.  If this command is within a file that is being
+
+read, control will not return to the keyboard.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 68 -                           
+
+

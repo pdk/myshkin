@@ -1,0 +1,17 @@
+new model Model-A
+
+cat' {<sh true> <we true> <mic false> <min false> <flu false>}
+rat' {<sh false> <we false> <mic true> <min true> <flu false>}
+animal' {<sh true> <we true> <mic true> <min true> <flu true>}
+
+fat' {<sh true> <we false> <mic true> <min false> <flu true>}
+thin' {<sh false> <we true> <mic false> <min false> <flu false>}
+
+eat' {<sh sh false> <we sh false> <mic sh false> <min sh false> <flu sh false> \
+      <sh we false> <we we false> <mic we false> <min we false> <flu we false> \
+      <sh mic true> <we mic false> <mic mic false> <min mic false> <flu mic false> \
+      <sh min false> <we min true> <mic min false> <min min false> <flu min false> \
+      <sh flu false> <we flu false> <mic flu false> <min flu false> <flu flu false> }
+
+die' {<sh false> <we true> <mic true> <min true> <flu false>}
+

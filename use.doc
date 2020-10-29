@@ -1,0 +1,275 @@
+    6.0 __Interacting with Myshkin__
+
+    Interacting with Myshkin is done by entering commands,
+rules, or items to be processed.  If a sentence is entered
+it will be parsed, translated and evaluated.  If a grammar
+rule is entered it will be put in the grammar.  Typing an
+expression results in it being evaluated.
+
+    Myshkin works line by line.  It first checks to see if
+the first word on the input line is a valid command, and if
+so executes the command.  If the first word of the line is
+not a recognizable command the line is passed to the grammar
+module, the lexicon module and the model module.  Each has a
+shot at interpreting the line.  If one of the modules uses
+it, then the program goes on to the next input line.  If
+none of the modules use it then an attempt is made to parse
+it as an input sentence.  If it is parsable then it's
+translated and the translation is evaluated.  Finally, the
+input line is passed directly to the evaluator.  The
+evaluator checks to see if it is a valid expression and if
+so evaluates it and shows the result.  It is unlikely that
+any line will be usable by more than one of these
+components, so usually only one of these things will happen.
+
+    There are several "show" commands to examine all parts
+of the program.  If a sentence is entered and the desired
+result is not generated the user may immediatly make a
+request for information and track down the missing link.
+
+    There are a few flags which control what parts of the
+parse-translate-evaluate series are shown.  A tree for each
+parse and the expressions created by translation can be
+shown or not.
+
+    The user can redirect the input and output during the
+program.  A shell command can be executed at any time.  This
+can be handy in the development of a grammar.
+
+    The "status" command gives information about the general
+state of the program, as in (u1.b-l).
+
+    u1.a.   ? status
+       b.   grammar is        English
+       c.   lexicon is        English
+       d.   model is          simple-world
+       e.   cooper-storage is default
+       f.   input is          stdin
+       g.   output is         stdout
+       h.   goal is           ms
+       i.   parse-string is   off
+       j.   parse-tree is     on
+       k.   translation is    on
+       l.   preserve-type is  on
+       m.   ?
+
+    [In the examples, the question mark is the prompt and is
+not entered by the user.  I use it here to distinguish
+between commands entered by the user and output of Myshkin.]
+
+    (u1.b-e) displays the names of the current modules.
+This will be discussed in the next section.  (u1.f,g) show
+what the current input and output files are.  This will be
+discussed in the Input/Output section, below.  The goal, in
+(u1.h), determines where to start with an attempt to parse a
+sentence.  It is set with the "goal" command, as in (u2.a).
+
+    u2.a.   ? goal s
+
+    (u1.i-l), the last four items, show switchs.  Each can
+be on or off.  To set one just enter the switch name
+followed by "on" or "off", as in (u3.a).
+
+    u3.a.   ? parse-tree off
+
+    The parse-string switch controls display of a string
+representation of the parse.  This string has none of the
+semantic information.  The parse-tree switch controls the
+display of the parse tree with grammatical and semantic
+information in a tree structure.  This is very useful for
+examining how the input is being parsed.  The translation
+switch controls the display of the translations made.  If
+entering sentences which are ambiguous, this is best "on".
+
+    The preserve-type flag controls whether or not
+type-preservation operations are done when quantifiers are
+brought in during translation.  There is no purpose in
+having it "off" except to show why it doesn't work that way.
+
+    6.1  __Model, Grammar, Lexicon and Cooper-Storage Modules__
+
+    Myshkin can hold multiple grammars, lexicons and models
+in memory.  There is always a current grammar, current
+lexicon and current model.  Every grammar, lexicon and model
+has a name.  When the program starts there is a grammar
+named "default", a lexicon named "default" and a model named
+"default".
+
+    The "select" command will change what is current.
+Suppose you've created an "English" grammar, and an
+"English" lexicon.  Issuing the command 
+
+    u4.a.   ? select English
+
+ will cause both of those to become current.  The
+command 
+
+    u5.a.   ? select default
+
+ will make the startup grammar, lexicon and model
+current.
+
+    The "new" command creates new grammars, etc. For
+example,
+
+    u6.a.   ? new grammar English
+       b.   ? new lexicon French
+       c.   ? new model world-A
+
+ will create a new grammar named "English".  The new grammar
+will be the current grammar until a new one is created, or
+an old one is selected.
+
+    If a new module is created with an old name the new
+module will supercede the old one and the old one will be
+destroyed.  This occurs only when the old and new modules
+are the same type.  That is a new grammar will supercede an
+old grammar, but not an old lexicon.  For instance, entering
+(u6.a) will make the current grammar "English" and if a
+grammar existed previously named "English" is will be
+destroyed and inaccessible.
+
+    There is also a thing called "cooper-storage" which
+holds parameters for the cooper-storage operations.  New
+places for keeping these parameters may be created with the
+"new" command, also.  And the select command affects this
+module.
+
+    The two things that the cooper-storage module maintains
+is the list of nodes where quantifying in happens and the
+list of nodes which are "restricted".  A "restricted" node
+generates translations with quantifiers in storage.  This is
+discussed in the translator section.  To add nodes to either
+of these lists, use the commands demonstrated in (u7.a,b).
+
+    u7.a.   ? cooper-node  n-bar
+       b.   ? cooper-restrict  n-bar
+
+    This adds "n-bar" to each of the lists.  To reset this
+module use the "new" command.
+
+    6.2  __Input/Output__
+
+    As said above all input is handled line by line.  The
+exception to this is that if there is a backslash at the end
+of the line, then the next line will be concatenated to the
+one with the backslash.  The backslash is a line
+continuation marker.
+
+    Also, anything after a "#" is ignored.  This is the
+comment character.  It may appear anywhere on the line.  To
+use the commend character and the line continuation marker
+together put the comment marker after the line contiuation
+marker.  (u8.a) and (u8.b) are equivilent.
+
+    u8.a.   cat' { <fl true>    \  # fluff is a cat
+                   <p true>     \  # puff is a cat
+                 }
+       b.   cat' { <fl true> <p true> }
+
+    The "read" and "write" commands are used to redirect
+input and output to and from files.  Entering (u9.a)
+
+    u9.a.   ? read Grammar
+
+ will cause the system to read the file "Grammar", and deal
+with the information there just as if it were entered
+directly.  Then control will return to the keyboard.
+
+    There are a couple commands that are handy to put in
+files that will be read this way.  "eof" tells Myshkin to
+close the file and resume with its old input source.  The
+"new" command (discussed above) can be extremely handy at
+the top of the file.  The user can cycle between editing the
+file and reading it.  If the "new" command is at the top,
+then each time the file is read the appropriate module can
+be reset to a clean slate.  The "echo" command can be used
+in a file to give the user information about what is
+happening during the reading of the file.  The "echo"
+command simply writes to the current output whatever is on
+the rest of the line.
+
+    The "write" command will redirect the output to a file.
+
+    u10.a.  ? write newfile
+
+    Entering this command will cause a new file called
+"newfile" to be created and until the file is closed (with
+the "close" command) or a new file is opened with the
+"write" command.  If a new file is opened with a "write"
+command when it is closed the old output stream will again
+become the output stream.  Consider (u11).
+
+    u11.a.  ? write file-A     # open file-A
+        b.  ? echo blah blah   # "blah blah" in file-A
+        c.  ? write file-B     # open file-B
+        d.  ? echo gurgle      # "gurgle"  in file-B
+        e.  ? close            # close file-B. go back to file-A
+        f.  ? echo burp        # "burp" written to file-A
+        g.  ? close            # close file-A. go back to stdout
+        h.  ? echo slurp       # "slurp" will go to stdout
+        i.  slurp
+        j.  ?
+
+    6.3  __Show Commands__
+
+    There are five show commands:
+
+    u12.a.  show-grammar
+        b.  show-lexicon
+        c.  show-model
+        d.  show-cooper
+        e.  show
+
+    Each can be entered with or without an argument.  If an
+argument is used then only items that match that argument
+will be shown.
+
+    u13.a.  ? show-grammar vp
+
+    (u13.a) will show all the "vp" rules in the grammar.  If
+no argument is given then all the information will be
+displayed.
+
+    u14.a.  ? show-lexicon
+
+(u14.a) will show everything in the lexicon.
+
+    The "show" command does all the other four.  If you just
+enter "show" then all the information in all the current
+modules will be displayed.  This is typically too much
+information to digest at once.  If you want to dump all the
+info to a file you can do (u15.a-c).
+
+    u15.a.  ? write dump-file
+        b.  ? show
+        c.  ? close
+
+    A more useful thing to do would be (u16.a-g).
+
+    u16.a.  ? write grammar-C     # open a file
+        b.  ? echo echo this is grammar-C
+        c.  ? echo new grammar-C
+        d.  ? show-grammar        # put the grammar in the file.
+        e.  ? close
+        f.  ? ! vi grammar-C      # go and edit the grammar.
+        g.  ? read grammar-C      # load the edited grammar.
+
+    With this the user can edit the current grammar.
+
+    6.4  __A Couple of Stray Commands__
+
+    The "parse" command can be used to explicitly parse a
+sentence and not do any translation or evaluation.  The
+parse-string and parse-tree will be displayed as the flags
+determine.  The command "translate" is similar.  It will
+parse the sentence and translate it.  Again the flags
+control what is shown or not.  (u17) shows a couple of examples. 
+
+    u17.a.  ? parse the duck flew.
+        b.  ? translate george ate a fish.
+
+    The final command is "done" or "end".  This will stop
+the program.  If this command is within a file that is being
+read, control will not return to the keyboard.
+

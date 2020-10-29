@@ -1,0 +1,48 @@
+Contents                                                             Page
+
+1.0  Myshkin  
+2.0  The Idol Programming Language  
+3.0  The Parser  
+     3.1  The Representation of the Lexicon  
+     3.2  The Representation of the Grammar  
+     3.3  Parse Tree Structure  
+     3.4  The Parsing Algorithm  
+     3.5  Left Recursion  
+     3.6  An Example Parse Trace  
+4.0  The Evaluator  
+     4.1  Boolean Objects  
+     4.2  Atoms  
+     4.3  Lists  
+     4.4  Sets  
+     4.5  Variables  
+     4.6  The Current Model and Predicates  
+     4.7  Expressions  
+          4.7.1  Predefined Function Expressions  
+          4.7.2  Quantifier Expressions  
+          4.7.3  Predicate Expressions  
+     4.8  Individual Indeterminate  
+5.0  The Translator  
+    5.1  Basic Grammar and Translations  
+    5.2  Noun Phrases, Quantifiers and Storage  
+    5.3  Verb Phrases  
+    5.4  Passives  
+    5.5  Topicalization  
+    5.6  Relative Clauses and Storage
+6.0  Interacting with Myshkin  
+    6.1  Model, Grammar, Lexicon and Cooper-Storage Modules  
+    6.2  Input/Output  
+    6.3  Show Commands  
+    6.4  A Couple of Stray Commands  
+
+Sample Parse Trace
+
+Source Files:
+    myshkin.iol
+    module.iol
+    parser.iol
+    translator.iol
+    evaluator.iol
+    file.iol
+    misc.iol
+
+References  

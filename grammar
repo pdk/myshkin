@@ -1,0 +1,148 @@
+# This file is Grammar.
+
+# reset the grammar
+new grammar English
+goal S
+
+S -> s . => 1
+
+# A normal sentence is made of an np followed by a vp.  The
+# translation of a vp is a gamma function which needs to be applied
+# to the subject.  
+s -> np vp => (2 1)
+
+# A topicalized sentence is made of the topicalized np, a comma, the
+# subject and then a vp with an np extracted (vp/np).  After applying
+# the translation of the vp to the subject, as with a normal sentence,
+# we still have to get the translation of the topicalized np into the
+# expression.  The result of applying the vp to the subject is applied
+# to the topicalized np.
+s -> np , np vp/np => ( (4 3) 1 )  # topicalized
+
+# s/np is a sentence with an np extracted.  Either the subject has
+# been extracted or some np has been extracted from the vp.  In either
+# case the result needs to be a gamma function.  Since the
+# translation of a vp is already a gamma function, we can just return
+# that as the translation if the subject has been extracted.
+s/np -> vp => 1
+
+# This rule just passes on the fact that an np has been extracted
+# somewhere. 
+s/np -> np vp/np => (2 1)
+
+# A compp might have a comp or not.  If an np has been extracted, pass
+# that fact to the s.  The comp branch can't have an np extracted.
+compp    -> comp s    => 2
+compp    -> s         => 1
+compp/np -> comp s/np => 2
+
+# An np can simply be a name.
+np -> name => 1
+
+# An np with a determiner creates a quantifier.  We need to put it in
+# storage.  (That's the "! 1" part.)  The gamma will take an
+# expression and make it the scope of the quantifier.  The restriction
+# is made out of the translation of the n-bar.  
+np -> det n-bar => ! 1 (gamma x (1 &var (2 &var) x))
+
+# An n-bar with an adjective -- make the translation the conjunction
+# of the adj applied to the variable (to be brought in later with a
+# gamma reduction) and the rest of the noun phrase applied to the
+# variable.
+n-bar -> adjp n => (gamma x (& (1 x) (2 x)))
+
+adjp -> adj => 1
+adjp -> adj, adjp => (gamma x (& (1 x) (3 x)))
+
+# Once we finally find the noun, make a gamma function to get the
+# variable and make an expression formed from the noun and the variable.
+n-bar -> n => (gamma x (1 x))
+
+# Relative clause -- make an "and" of the n-bar and a compp with the
+# np extracted.  The variable at the top of this np (the relative
+# clause) will take the place of the extracted np.
+n -> n compp/np => (gamma x (& (1 x) (2 x)))
+
+# copula verb phrases.  With an adjective make an expression from the
+# adj.  With a np see if the subject is equal to the np.
+vp -> cop adj => (gamma x (2 x))
+vp -> cop np  => (gamma x (equal x 2))
+
+# vps return gamma functions which put the subject in their place in
+# the expression built from the verb.
+vp -> v1    => (gamma x (1 x))
+vp -> v2 np => (gamma x (1 x 2))
+
+# A vp that has a child can have the pp before or after the np.
+vp -> v3 np pp => (gamma x (1 x 2 3))
+vp -> v3 pp np => (gamma x (1 x 3 2))
+
+# A ditransitive verb with the indirect object missing -- use the
+# individual indeterminate in the place of the missing indirect
+# object. 
+vp -> v3 np => (gamma x (1 x 2 ?))
+
+# Dative construction.  The first np used to be the indirect object. 
+vp -> v3 np np => (gamma x (1 x 3 2))
+
+# A vs is a verb that takes a sentential object.
+vp -> vs compp => (gamma x (1 x 2))
+vp/np -> vs compp/np => (gamma a (gamma b (1 b (2 a))))
+
+# Here we have several vps with nps extracted.  Put in an extra gamma
+# to fetch the np that's been extracted.
+vp/np -> v2          => (gamma y (gamma x (1 y x)))
+vp/np -> v3 np pp/np => (gamma y (gamma x (1 y 2 x)))
+vp/np -> v3 pp       => (gamma y (gamma x (1 y x 2)))
+vp/np -> v3          => (gamma y (gamma x (1 y x ?)))
+vp/np -> v3 np       => (gamma y (gamma x (1 y 2 x)))
+
+# Here are some pp rules.  The translation of the pp/np should not
+# ever be requested.  The translation of a normal pp is just the
+# translation of the np child.  A "prep" is something like "back",
+# "on", etc.
+pp    -> p np => 2
+pp/np -> p =>
+pp    -> prep => 1
+
+# Passive rules -- the first thing is to get the 'be' auxiliary.  When
+# we find that we have a passive construction.
+vp -> aux-be vp-pass => 2
+
+# The translation of the by-phrase will fill the role of the subject
+# in a normal sentence.
+byp    -> by np => 2
+byp/np -> by    =>
+
+# Here are the passive vps.  For each of the normal rules we get two
+# here.  One with a by-phrase and one without.  The ones without get
+# an individual indeterminate to fill the hole.  The gamma will get
+# the new subject and put it in the place of the direct object, except
+# in the case of the dative, where the indirect object is the new
+# subject. 
+vp-pass -> v2        => (gamma x (1 ? x))      # mary was killed.
+vp-pass -> v2 byp    => (gamma x (1 2 x))      # mary was killed by george.
+vp-pass -> v3        => (gamma x (1 ? x ?))    # a ball was thrown.
+vp-pass -> v3 byp    => (gamma x (1 2 x ?))    # a ball was thrown by george.
+vp-pass -> v3 pp     => (gamma x (1 ? x 2))    # a ball was thrown to mary.
+vp-pass -> v3 pp byp => (gamma x (1 3 x 2))    # a ball was thrown to mary by george.
+vp-pass -> v3 byp pp => (gamma x (1 2 x 3))    # a ball was thrown by george to mary
+vp-pass -> v3 np byp => (gamma x (1 3 2 x))    # mary was thrown a ball by george.
+                                                # *a ball was thrown mary by george.
+vp-pass -> v3 np     => (gamma x (1 ? 2 x))    # mary was thrown a ball.
+                                                # *a ball was thrown mary.
+
+# Here's the rule for a passive from which some np has been extracted,
+# say by topicalization.
+vp/np -> aux-be vp-pass/np => 2
+
+# and the vp-pass rules where a np could have been extracted.
+vp-pass/np -> v2 byp/np    => (gamma y (gamma x (1 x y)))
+vp-pass/np -> v3 byp/np    => (gamma y (gamma x (1 x y)))
+vp-pass/np -> v3 pp/np     => (gamma y (gamma x (1 ? y x)))
+vp-pass/np -> v3 pp/np byp => (gamma y (gamma x (1 3 y x)))
+vp-pass/np -> v3 pp byp/np => (gamma y (gamma x (1 x y 2)))
+vp-pass/np -> v3 byp/np pp => (gamma y (gamma x (1 x y 3)))
+vp-pass/np -> v3 byp pp/np => (gamma y (gamma x (1 2 y x)))
+vp-pass/np -> v3 byp       => (gamma y (gamma x (1 2 x y)))
+vp-pass/np -> v3           => (gamma y (gamma x (1 ? x y)))

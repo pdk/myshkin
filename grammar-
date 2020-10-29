@@ -1,0 +1,64 @@
+new grammar Grammar-A
+
+cooper-node s s/np cp
+cooper-restrict n-bar cp
+
+goal sp
+
+byp/np -> by =>
+compp/np -> comp s/np   => 2
+cp         -> cop adj        => 2
+cp         -> cop np         => (gamma x (equal x 2))
+n-bar      -> adj n-bar  => (gamma x (and (1 x) (2 x)))
+n-bar      -> n          => (gamma x (1 x))
+n-bar      -> n-bar compp/np => (gamma x (and (1 x) (2 x)))
+np         -> det n-bar  => ! 1 (gamma x (1 &var (2 &var) x))
+np         -> name       => 1
+pp         -> p np       => 2
+pp/np      -> p  =>
+s          -> np , np vp/np => ( (4 3) 1 )
+s          -> np vp      => (2 1)
+s/np       -> vp => 1
+s/np       -> np vp/np       => (2 1)
+s/np       -> np/np vp       => (gamma a (2 (1 a)))
+sp         -> s .            => 1
+vp         -> cp             => 1
+vp         -> aux-be vp-pass => 2
+vp         -> v1         => (gamma x (1 x))
+vp         -> v2 np      => (gamma x (1 x 2))
+vp         -> v3 np      => (gamma x (1 x 2 ?))
+vp         -> v3 np np   => (gamma x (1 x 3 2))
+vp         -> v3 np pp   => (gamma x (1 x 2 3))
+vp-pass    -> v2        => (gamma x (1 ? x))
+vp-pass    -> v2 byp    => (gamma x (1 2 x))
+vp-pass    -> v3        => (gamma x (1 ? x ?))
+vp-pass    -> v3 byp    => (gamma x (1 2 x ?))
+vp-pass    -> v3 byp pp => (gamma x (1 2 x 3))
+vp-pass    -> v3 np     => (gamma x (1 ? 2 x))
+vp-pass    -> v3 np byp => (gamma x (1 3 2 x))
+vp-pass    -> v3 pp     => (gamma x (1 ? x 2))
+vp-pass    -> v3 pp byp => (gamma x (1 3 x 2))
+vp-pass/np -> v2 byp/np    => (gamma y (gamma x (1 x y)))
+vp-pass/np -> v3           => (gamma y (gamma x (1 ? x y)))
+vp-pass/np -> v3 byp       => (gamma y (gamma x (1 2 x y)))
+vp-pass/np -> v3 byp pp/np => (gamma y (gamma x (1 2 y x)))
+vp-pass/np -> v3 byp/np    => (gamma y (gamma x (1 x y)))
+vp-pass/np -> v3 byp/np pp => (gamma y (gamma x (1 x y 3)))
+vp-pass/np -> v3 np byp/np => (gamma y (gamma x (1 x 2 y)))
+vp-pass/np -> v3 np/np     => (gamma x (gamma a (1 ? (2 a) x))
+vp-pass/np -> v3 np/np byp => (gamma x (gamma a (1 3 (2 a) x))
+vp-pass/np -> v3 pp byp/np => (gamma y (gamma x (1 x y 2)))
+vp-pass/np -> v3 pp/np     => (gamma y (gamma x (1 ? y x)))
+vp-pass/np -> v3 pp/np byp => (gamma y (gamma x (1 3 y x)))
+vp/np      -> v2           => (gamma y (gamma x (1 y x)))
+vp/np      -> v3           => (gamma y (gamma x (1 y x ?)))
+vp/np      -> v3 np        => (gamma y (gamma x (1 y 2 x)))
+vp/np      -> v3 np pp/np  => (gamma y (gamma x (1 y 2 x)))
+vp/np      -> v3 pp        => (gamma y (gamma x (1 y x 2)))
+vp/np      -> aux-be vp-pass/np => 2
+vp/np      -> v2 np/np     => (gamma x (gamma a (1 x (2 a))))
+vp/np      -> v3 np np/np  => (gamma x (gamma a (1 x (3 a) 2))
+vp/np      -> v3 np/np     => (gamma x (gamma a (1 x (2 a) ?))
+vp/np      -> v3 np/np np  => (gamma x (gamma a (1 x 3 (2 a)))
+vp/np      -> v3 np/np pp  => (gamma x (gamma a (1 x (2 a) 3))
+

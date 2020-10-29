@@ -1,0 +1,174 @@
+    2.0  __The Idol Programming Language__
+
+    Idol [2] is "an Icon Derived Object Language".  It is an
+object oriented extension of the Icon programming language. [1]
+A brief introduction to the language will facilitate the
+readers understanding of Myshkin, and its algorithms.
+
+    I chose Icon for my development language for several
+reasons. It is a very high-level language with many
+string-processing tools.  Variables are not strongly typed.
+The most important reason is that it has built-in control
+structures for creating and using "generators".  Generators
+in Icon are procedures that can produces multiple values,
+instead of just one as with standard languages like C,
+Pascal, and Lisp.
+
+    Icon has no boolean type.  All expressions in the
+language may fail or succeed.  If an expression succeeds it
+may produce a value.  Consider the "if" control structure 
+in (i1.a).
+
+    i1.a.   if var2 == "tom" then 
+              write("it is tom")
+            else
+              write("it is not tom")
+
+    The expression 'var2 == "tom"' will either succeed or
+fail, depending on the value of "var2".  This expression
+produces the value "tom" if it succeeds and no value if it
+fails.  If this expression succeeds "it is tom" will be
+printed, and if it fails "it is not tom" will be printed.
+
+    In order to understand the algorithms of Myshkin it is
+essential to have an understanding of how generators work.
+Consider the expression (i2.a).
+
+    i2.a.   find("th","the theme of his thesis")
+
+    (i2.a) is an Icon expression built on the generator
+"find".  It generates the locations of the first string in
+the second string: 1, 5, and 18.  Each time the "find"
+procedure locates a position where "th" occurs it suspends
+operation, generating the position.  The "every" control
+structure allows us to iterate on generator.  The expression
+(i3.a) 
+
+    i3.a.   every location := find("the", "the theme") do
+              write(location)
+
+will result in the output
+
+    i4.a.   1
+            5
+
+    The "every" control structure keeps resuming 
+
+    i5.a.   location := find("...
+
+ in (i3.a) until it fails.  When "find" can find no more
+locations it fails.
+
+    A key thing is that the "find" procedure suspends and
+all its context is saved until it resumes.  When it resumes
+it continues from the point where is suspended.
+
+    Consider this user-defined generator (i6.a)
+
+    i6.a.   procedure gen4()
+              write("a")
+              suspend 1
+
+              write("b")
+              suspend 2
+            end
+
+    This procedure generates the values 1 and 2.  It also
+writes "a" and "b".  With the "every" control structure we
+can write all these values.
+
+    i7.a.   every num := gen4() do
+              write(num)
+
+    The output of (i7.a) is (i8.a).
+
+    i8.a.   a
+            1
+            b
+            2
+
+    It executes like this: "gen4" is called by the "every"
+control structure and writes "a".  It suspends with the
+value 1.  The value of "gen4" is assigned to "num". ("num"
+gets the value 1.)  Then "num" (1) is written.  "gen4" is
+resumed by the "every".  Since it has just finished the
+"suspend 1" statement it goes on from there; "b" is written.
+Then "gen4" suspends with the value 2.  This value is
+assigned to "num" and is written.  Then "gen4" resumes
+again.  Since it has reached the end of the procedure it
+fails.  Since "gen4" fails the expression "num := gen4()"
+fails.  The "every" loop ends.
+
+    This idea is used extensively in Myshkin to deal with
+ambiguity.  In general, where an amibiguity may exist a
+generator is used to generate all the possibilities.
+
+    The only difference between Idol and Icon is that Idol
+has tools for defining objects with methods.  Different
+classes of objects may have different procedures which are
+named the same.  Consider (i9).
+
+    i9.a.   class dog()
+              method speak()
+                write("bark!")
+              end
+            end
+    
+       b.   class frog()
+              method speak()
+                write("croak!")
+              end
+            end
+    
+       c.   class cat()
+              method speak()
+                write("meow!")
+              end
+            end
+
+    We can create objects from these declarations with the
+assignment operator, and try out the methods with the "$"
+operator.
+
+    i10.a.  fluff := cat()
+            spot := dog()
+            ferd := frog()
+    
+        b.  fluff$speak()
+            spot$speak()
+            ferd$speak()
+    
+    The output of (i10.a-b) is (i11.a).
+
+    i11.a.  meow!
+            bark!
+            croak!
+    
+    These object-oriented tools are most useful in the
+evaluator where every object can be evaluated, but depending
+on its type, may be evaluated differently.
+
+    Classes are like structure definitions in C, or record
+definitions in Pascal.  (The ones shown above have no
+fields.)  For example,
+
+    i12.a.  class segment( voiced, constricted, labial )
+              method voice()
+                ...
+              end
+              method labialize()
+                ...
+              end
+            end
+
+    The fields "voiced", "constricted" and "labial" in
+(i12.a) are not accessable except to the methods of the
+class.  To make a field accessable to code outside the class
+definition, they are declared "public", as in (i13.a).
+
+    i13.a.  class segment( public voiced, 
+                           public constricted, 
+                           public labial )
+              ...
+            end
+

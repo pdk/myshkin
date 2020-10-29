@@ -1,0 +1,576 @@
+    4.0  __The Evaluator__
+
+    This discussion of the evaluator focuses on the types of
+objects and their syntax that the evaluator recognizes and
+can evaluate.
+
+    The evaluator works by handling seven types of objects.
+
+    e5.a.   Boolean
+       b.   Atom
+       c.   List
+       d.   Set
+
+       e.   Variable
+       f.   Predicate
+       g.   Expression
+
+    Objects of all these types may be evaluated.  Also, any
+object may be compared with any other for equality.
+Evaluating an object may produce a new object: evaluating a
+variable may produce an atom. The new object is "the value
+of" the object that was evaluated.  An object and its value
+are potentially distinct.
+
+    For the types (e5.a-d) the value of that type object
+will be of the same type: the value of an atom will be an
+atom, the value of a list will be a list, etc.  The later
+three types will most likely not have values of the same
+type.  The value of a variable or expression may be any
+type.  The value of a predicate will be a set.
+
+    There is a special atom which is the individual
+indeterminate.  It has the form "?".  It cannot be evaluated
+directly.  
+
+    We will begin with a general syntactic description.
+Then we will examine each of the types shown above in (e5)
+in the order shown.  With the description of the predicates
+will come the representation of the model.  In the
+expression portion we will discuss logical functions,
+application of predicates, and the truth conditions of
+quantifiers.  Finally we will see the interpretation of the
+individual indeterminate.
+
+    The evaluator evaluates predicate calculus with
+quantifiers with a three-valued logic.  The syntax of the
+expressions within the evaluator is different than standard
+syntax for predicate calculus.  The syntax of the evaluator
+is basically that of Lisp.  The operators are prefix instead
+of infix.
+
+    e1.a.  true ^ false       becomes   (and true false)
+       b.  true v false       becomes   (or true false)
+       c.  true -> false      becomes   (impl true false)
+
+    Predicate expressions are formed with the predicate
+inside the parentheses.
+
+    e2.a.  cat'( s )          becomes   (cat' s)
+
+And quantifiers are inside parentheses, too.
+
+    e3.a.  Ex:cat'(x)[love'(m,x)]  
+
+becomes  
+
+    e4.b.  (E .x (cat' .x) (love' m .x))
+
+    Variables are marked with a period to simplify keeping
+them distinct from symbols denoting entities.  No commas are
+used.
+
+
+    4.1  __Boolean Objects__
+
+    There are three objects of boolean type: "true", "false"
+and "nil".  "nil" is analogous to "unknown".  The value of a
+boolean object is itself.
+
+    4.2  __Atoms__
+
+    Atoms are used to denote entities.  An atom is a string.
+It may not begin with a period ("."), and it may not end
+with a prime mark ("'").  Some valid atoms are shown in
+(e6). 
+
+    e6.a.   a
+       b.   mary
+       c.   gluber-flack
+
+    (e7) shows items which are not valid atoms.
+
+    e7.a.   true
+       b.   nil
+       c.   .x
+       d.   .45
+       e.   cat'
+       f.   glack'
+
+    The value of an atom is itself.  
+
+    4.3  __Lists__
+
+    A list is an ordered sequence of valid objects enclosed
+with angled brackets.  Some valid lists are shown in (e8).
+
+    e8.a.   <mary carrot true>
+       b.   <.a .b carrot>
+       c.   <<mary> <fred> false>
+       d.   <>
+       e.   <erg gre carrot>
+       f.   <mary .b>
+       g.   <mary .c>
+       h.   <mary true>
+
+    The value of a list is a list of the values of the
+objects in the list.  For instance, suppose that the value
+of ".a" is "erg" and the value of ".b" is "gre" then the
+value of (e8.b) is (e8.e).
+
+    Two lists are equal if they both have the same sequence
+of objects.  Two lists may have equal values, but not be
+equal.  For instance, suppose the value of ".b" is "true"
+and the value of ".c" is "true", then (e8.f) and (e8.g) have
+equal values, namely (e8.h), but are not equal.
+
+    4.4  __Sets__
+
+    A set is a collection of objects.  A set is formed by
+surrounding a collection of objects with curly brackets.
+Some valid sets are shown in (e9).
+
+    e9.a.   {fred wilma barney}
+       b.   {<fred true> <mary false>}
+       c.   {{fred} <fred> fred}
+       d.   {}
+       e.   {.a .b .c}
+       f.   {true false}
+
+    A set will not contain two objects which are equal.  The
+value of a set is a set containing the values of the objects
+in the set.  The values of (e9.a-d) are themselves, since
+the only objects they contain are objects whose values are
+themselves.  Suppose the values of the variables ".a", ".b"
+and ".c", in (e9.e) are "true", "true" and "false".  The
+value of (e9.e) will be (e9.f).
+
+    4.5  __Variables__
+
+    There are an unlimited number of objects of variable
+type.  A variable object is formed by a period and a string
+of characters.  Some valid variables are shown in (e10).
+
+    e10.a.   .a
+        b.   .a87
+        c.   .b9
+        d.   .a-very-long-variable-name-9999
+        e.   .23
+
+    A variable can be assigned values of any type.  The
+expression (e12.a)
+
+    e12.a.  (set .b9 true)
+
+ sets the value of the variable ".b9" to "true" (of boolean
+type).  If a variable has not been set, that is, if it has
+no value, evaluating it will cause an error, and evaluation
+will stop.
+
+    e13.a.  (cat' .b9)
+
+    If the variable ".b9" has no value then evaluating the
+expression (e13.a) will cause an error and the evaluation
+will stop, producing no value.  This will stop evaluation of
+expressions where a variable is out of the scope of its
+quantifier.
+
+    4.6  __The Current Model and Predicates__
+
+    Predicates are strings which end with "'".  Shown in
+(e14) are some predicates.
+
+    e14.a.   cat'
+        b.   dog'
+        c.   fried'
+
+    Predicates are the primary link with a model.  Stored in
+the model are sets associated with predicates.  The value of
+a predicate is the set associated with it in the current
+model.  The value of a predicate should be a set made of
+lists of two or more parts.  For instance, the following
+statements create usable predicates in the current model:
+
+    e15.a.   cat' {<fluff true> <puff true> 
+                   <gruff false> <mary false>}
+        b.   dog' {<gruff true> <spot true>}
+        c.   eat' {<mary carrot-23 true> 
+                   <gruff puff true>}
+
+    Issuing (e15.a-c) to the program will create three
+predicates in the current model.  
+
+    In addition to keeping the values of predicates the
+model keeps a set (an Icon set, not a Myshkin set)
+containing all the atoms mentioned in the predicates.  This
+is for when quantifiers are evaluated, all the entities in
+the model can be gotten.  This is done with the 'domain'
+method which generates all the atoms in this set.
+
+    4.7  __Expressions__
+
+    Expressions are formed with parentheses surrounding a
+sequence of two or more objects.  (e16) shows some
+expressions. 
+
+    e16.a.   (or true false)
+        b.   (not false)
+        c.   (set .x fluff)
+        d.   (reset .x)
+        e.   (and true true false)
+        f.   (cat' fluff)
+        g.   (cat' .f)
+        h.   ({<fluff true>} fluff)
+        i.   (E .f (cat' .f) (eat' .f roger-the-rat))
+
+    The first object in the sequence is the "function" and
+all other objects are "arguments".
+
+    There are three kinds of expressions: predefined
+function expressions, quantifier expressions and predicate
+expressions.  I'll describe them in that order.
+
+    4.7.1  __Predefined Function Expressions__
+
+    The predefined functions fall into three categories:
+variable manipulators (e17.a-b), logical functions
+(e17.c-i), and the comparison operator (e17.j).
+
+    e17.a.   set
+        b.   reset
+                                                          .
+        c.   and    (also &, ^)
+        d.   or     (also v)
+        e.   xor    (also xv)
+        f.   impl   ("implication")
+        h.   bimpl  ("bi-implication")
+        i.   not    (also ~, !)
+                                                          .
+        j.   equal  (also =)
+
+
+    The variable manipulator functions "set" and "reset" are
+used to give variables values and take them away.  "set"
+gives a variable a new value.  The old values of a variable
+are kept on a stack.  "reset" changes the value of a
+variable back to the thing on the top of the stack.  A "set"
+expression must have two arguments.  The first must be a
+variable and the second may be any valid object.  A "reset"
+expression must have one argument which is a variable.
+
+    Here are some valid "set" and "reset" expressions:
+
+            Expression                Value of ".a"
+                                                          .
+    e18.a.  (set .a true)             true
+        b.  (set .a mary)             mary
+        c.  (set .a <cliff true>)     <cliff true>
+        d.  (reset .a)                mary
+        e.  (reset .a)                true
+        f.  (reset .a)                --undefined--
+
+
+    The evaluator implements a three-valued logic.  The
+three boolean values are "true", "false" and "nil".  "nil"
+is used to mean "unknown".
+
+    All the logical operators, except "not", take two
+arguments.  "not" takes one argument.  If any of these
+functions are given the wrong number of arguments, or if an
+argument's value's type is not boolean then an error will be
+signaled and evaluation will halt.
+
+    The three-valued logic is defined on the basis of "nil"
+being equivilent to "unknown".  In cases where a value of
+"true" or "false" could be substituted for "nil" and the
+value of the expression not be changed, then that value will
+be produced.  For instance, in "and" if one argument is
+"false" then if the other argument were "true" or "false" it
+would make not difference.  The value of "(and false nil)"
+is "false".  With "or" if either argument is "true" then the
+expression is "true".
+
+    (e19) is a chart showing values of ".p" and of the
+expression "(not .p)".  This "not" is equivilent to normal
+negation with the addition that "(not nil)" is "nil".
+
+             .p    (not .p)
+                                                          .
+    e19.a.  true   false
+        b.  false  true
+        c.  nil    nil
+
+    (e20) is a chart for "and".  The value of an "and"
+expression is "true" if both arguments are "true".  The
+value is "false" when either argument is "false".
+Otherwise, the value is "nil".
+
+             .p    .q       (and .p .q)
+                                                          .
+    e20.a.  true   true     true
+        b.  true   false    false
+        c.  true   nil      nil
+        d.  false  true     false
+        e.  false  false    false
+        f.  false  nil      false
+        g.  nil    true     nil
+        h.  nil    false    false
+        i.  nil    nil      nil
+
+    (e21) is the chart for "or".  The value of an "or"
+expression is "true" if either argument is "true".
+Otherwise, the value is "nil" if either argument is "nil".
+Otherwise, the value is "false".  Therefore, the value of an
+"or" expression is "false" only if both arguments are
+"false".
+
+             .p    .q       (or .p .q)
+                                                          .
+    e21.a.  true   true     true
+        b.  true   false    true
+        c.  true   nil      true
+        d.  false  true     true
+        e.  false  false    false
+        f.  false  nil      nil
+        g.  nil    true     true
+        h.  nil    false    nil
+        i.  nil    nil      nil
+
+    (e22) is the chart for "xor" (exclusive or).  The value
+of an "xor" expression is "true" only if one argument is
+"true" and the other is "false".  The value is "nil" if
+either argument is "nil".  The value is "false" if both
+arguments are "true" or if both arguments are "false".
+
+             .p    .q       (xor .p .q)
+                                                          .
+    e22.a.  true   true     false
+        b.  true   false    true
+        c.  true   nil      nil
+        d.  false  true     true
+        e.  false  false    false
+        f.  false  nil      nil
+        g.  nil    true     nil
+        h.  nil    false    nil
+        i.  nil    nil      nil
+
+    (e23) is the chart for "impl" (logical implication).
+The value of an "impl" expression is "true" if the first
+argument is "false".  The value is "nil" if the first
+argument is "nil".  The value of an "impl" expression is the
+second argument if the first argument is "true".
+
+             .p    .q       (impl .p .q)
+                                                          .
+    e23.a.  true   true     true
+        b.  true   false    false
+        c.  true   nil      nil
+        d.  false  true     true
+        e.  false  false    true
+        f.  false  nil      true
+        g.  nil    true     nil
+        h.  nil    false    nil
+        i.  nil    nil      nil
+
+    (e24) is the chart for "bimpl" (bi-implication, if and
+only if).  The value of a "bimpl" expression is "true" if
+both arguments are "true" or if both arguments are "false".
+The value is "nil" if either argument is "nil".  Otherwise,
+the value is "false".
+
+             .p    .q       (bimpl .p .q)
+                                                          .
+    e24.a.  true   true     true
+        b.  true   false    false
+        c.  true   nil      nil
+        d.  false  true     false
+        e.  false  false    true
+        f.  false  nil      nil
+        g.  nil    true     nil
+        h.  nil    false    nil
+        i.  nil    nil      nil
+
+
+    4.7.2  __Quantifier Expressions__
+
+    All quantifier expressions have the form shown in (e25.a).
+
+    e25.a.    (quant var restriction scope)
+
+    The "quant" is a quantifier.  There are currently four
+available: "E", "A", "EU" and "M".  These are the
+existential ("E"), the universal ("A"), the unique
+existential ("EU") and "most" ("M").  The satisfaction
+conditions of each of these will be discussed shortly.
+
+    The "var" is any valid variable.  The "restriction" and
+"scope" should be either a boolean or an expression.  Here
+are some examples:
+
+    e26.a.   (E .x  (dog' .x)  (died' .x))
+        b.   (A .y  true  (alive' .y))
+
+    Recall that all the atoms mentioned in the definition of
+predicates are kept in the domain of the model.  The
+quantifiers work by getting those atoms from the model and
+setting the var to have the value of those atoms.  Each time
+this is done the values of the restriction and scope are
+checked.
+
+    The truth conditions of the quantifiers is based again
+on "nil" meaning "unknown".  In cases where there is enough
+"true" or "false" evidence "true" or "false" will be the
+result, otherwise the value will be "nil".
+
+    An "E" expression's value is "true" if there is some
+assignment of var such that both the restriction and the
+scope are "true".  Otherwise the value is "nil" if (1) there
+is some assignment such that the restriction is "nil", or
+(2) the restriction is "true" and the scope is "nil".
+Otherwise the value is "false".
+
+    An "A" expression's value is true if for every
+assignment of var such that the restriction is "true" the
+scope is "true", provided that there is no assignment such
+that the restriction is "nil".  The value is "false" if
+there is an assignment such that the restriction is "true"
+and the scope is "false".  Otherwise the value is "nil".
+
+    An "EU" expression's value is "true" if there is exactly
+one assignment of var where both the restriction and the
+scope are "true", provided that there is no assignment such
+that (1) the restriction is "nil", or (2) the restriction is
+"true" and the scope is "nil".  If there is more or less
+than one assignment such that the restriction and the scope
+are "true", then the value is "false".  Otherwise the value
+is "nil" (in cases (1) and (2)) or "false" (when all
+assignments are such that the restriction is "false").
+
+    An "M" expression's value is based on the count of three
+alternatives.  For a particular evaluation of an "M"
+expression let (1) t be the number of assignments where the
+restriction is "true" and the scope is "true"; (2) f be the
+number of assigments where the restriction is "true" and the
+scope is "false"; and (3) u be the number of assignments
+where (i) the restriction is "nil", or (ii) the restriction
+is "true" and the scope is "nil".  Given these counts, if
+then sum of t, f and u is zero then the value of the
+expression is "true".  (This is the case if the restriction
+was "false" for every assignment of var.)  If t is larger
+than the sum of f and u then the value is "true".  If f is
+larger than or equal to the sum of t and u then the value is
+"false".  Otherwise the value is "nil".
+
+    4.7.3  __Predicate Expressions__
+
+    An expression which is not one of the kinds of expressions
+described above is assumed to be a predicate expression.  To
+be a valid predicate expression the value of first item must
+be a set.  It may be a predicate (e27.a), a variable whose value is
+a set (e27.b), or just a set (e27.c).
+
+    e27.a.   (person' mary)
+        b.   (.zed mary)
+        c.   ({<mary true> <george false>} mary)
+
+    The things in the set should be lists with lengths of two or
+more.  The set is considered to be a "function" in
+mathematical terms.  It is a mapping from vectors of objects
+to objects.  Consider these lists:
+
+    e28.a.   <george true>
+        b.   <mary george false>
+        c.   <mary carrot-23 true>
+
+ (e28.a) is a mapping from "<george>" to "true".  (e28.b) is
+a mapping from "<mary george>" to "false".  (e28.c) is a
+mapping from "<mary carrot-23>" to "true".
+
+    The values of the arguments of the predicate expression
+are put into a list, or vector, and the set is searched for
+a mapping from that list to some object.  If no matching
+list is found the default, "nil", is the value.
+
+    Suppose we have a predicate formed from the lists in (e28).
+
+    e29.a.   foo'  { <george true> 
+                     <mary george false> 
+                     <mary carrot-23 true> }
+
+Then the value of (e30.a)
+
+    e30.a.   (foo' george)
+
+is "true", and the value of (e30.a)
+
+    e31.a.   (foo' mary george)
+
+is "false".
+
+    Consider this predicate:
+
+    e32.a.   eat' { <mary { <carrot-23 true> 
+                            <apple-2 true> }>
+                    <george { <carrot-22 false> 
+                              <apple-4 true>}> 
+                  }
+
+    This predicate has values which are functions.  The
+value of (e33.a) is (e33.b) and the value of (e34.a) is
+(e34.b).
+
+    e33.a.   (eat' mary)
+        b.   { <carrot-23 true> <apple-2 true> }
+
+    e34.a.   (eat' george)
+        b.   { <carrot-22 false> <apple-4 true> }
+
+    With the predicate (e32.a) we can evaluate (e35.a-b).
+
+    e35.a.   ((eat' mary)  carrot-23 )
+        b.   ((eat' george)  apple-4 )
+
+ and get "true" as the value of these expressions.  Note
+that (e35.a-b) are different expressions than (e36.a-b).
+
+    e36.a.   (eat' mary carrot-23)
+        b.   (eat' george apple-4)
+
+    Again: if a mapping cannot be found for the arguments,
+then the value of the expression is "nil" ("unknown") by
+default.
+
+    The user should beware that they not put more than one
+mapping from a single list as this is not checked for and
+the results will be unpredictable.
+
+    4.8  __Individual Indeterminate__
+
+    The individual indeterminate "?" is expanded to an
+existential expression during evaluation.
+
+    e37.a.   (eat' mary ?)
+        b.   (E .v true (eat' mary .v))
+
+    The expression (e37.a) is expanded to and replaced by
+(e37.b).  Since the restriction of this expression is "true"
+the only requirement for the whole expression to be true is
+that there exist some atom in the model's domain such that
+the scope is true when that atom is assigned to ".v".
+
+    Suppose the individual indeterminate was not expanded
+this way, but just matched "any atom".  Consider (e38).
+
+    e38.a.   dog' { <fluff false> <spot true> }
+        b.   (dog' ?)
+
+    We want the value of (e38.b) to be "true" with the
+definition of "dog'" in (e38.a).  If the individual
+indeterminate were to just match any atom, then the value of
+(e38.b) might be "false".  This is because the search for a
+match with "<?>" would match "<fluff>" and the result of
+this match would be to give the value of the expression as
+"false".  The search with regards to "?" needs to be with
+the aim of finding "true", not just any answer.  This is why
+the individual indeterminate is expanded to an existential.
+

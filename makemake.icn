@@ -1,0 +1,22 @@
+procedure main()
+    tempfilename := "lQsTaKkdjUfldsZZkjPf.temp"
+    system( "ls *.icn >" || tempfilename )
+    flist := open( tempfilename )
+    mout := &output
+    the_list := ""
+    while line := read(flist) do
+    {
+        the_name := line[1:-4]||".u1"
+        the_list ||:= " " || the_name
+        write(mout, the_name, "  :  ", line )
+        write(mout, "\ticont -c -s ", line )
+        write(mout)
+    }
+    write(mout, "alldone  : ", the_list )
+    write(mout, "\ttouch alldone" )
+    close(mout)
+    close(flist)
+    system( "rm "||tempfilename )
+end
+
+

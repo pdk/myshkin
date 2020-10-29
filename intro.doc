@@ -1,0 +1,127 @@
+    1.0  __Myshkin__
+
+    The scope of this project was to create a computer
+program which would evaluate the at issue entailments of
+simple English sentences.  This work is based on what I
+learned in syntax and semantics classes.  The program is
+implemented in the Idol programming language.
+
+    Originally I proposed a three-module system, working
+together in a chain, each taking instruction from the user.
+The three modules were to be the parser, the translator and
+the evaluator.  The parser was to be given a context-free
+grammar and to generate parse trees from input sentences and
+the grammar.  The translator was to take the parse trees and
+with user-defined translation rules generate an expression
+of predicate calculus with quantifiers.  The evaluator was
+to take these expressions and evaluate them with regard to a
+model specified by the user.
+
+ CFG            translation rules      model
+  |                |                    |
+  V                V                    V
++----------+     +--------------+     +-------------+
+|  parser  | --> |  translator  | --> |  evaluator  | --> output
++----------+     +--------------+     +-------------+
+
+    The final structure of the program is based on this
+original plan, but changed in areas.  The context-free
+grammar has been divided into a context-free grammar and a
+lexicon.  This has two main benifits: the program is easier
+to use (the user can easily change the lexicon without
+dealing with the grammar); and lexical lookup is much more
+efficient.
+
+    At the commencement of the project I had little idea how
+I was going to construct the translator (beside the fact
+that it would build the meaning of the whole from the
+meaning of the parts).  I thought that I would either do
+rule-by-rule translation, or type-driven translation, as
+done in "Generalized Phrase Structure Grammar" by Gazdar,
+Klein, Pullum and Sag.  Because doing a type-driven
+translation scheme would require more research (and possibly
+prove limited in the end) and I knew that a rule-by-rule
+approach would be simpler and account for at least as many
+phenomena as a type-driven approach, I chose to implement a
+rule-by-rule translation system.  The translation rules are
+entered with the grammar rules.  During the parsing the
+translation rules are put in the parse tree.  Then they are
+handed to the translator within the parse tree ready to be
+used to make a translation.  The translation rules are not
+fed directly to the translator, as in the original proposal.
+
+    The representation of the model underwent some major
+structural changes.  Originally I had thought to create a
+model based on existence in sets.  For example,
+
+    m1.a.    cat' { fluff puff sherman }
+
+ might indicate that there is a set of cats containing
+Fluff, Puff and Sherman.  To determine if some entity were a
+cat the program would check to see if it was in the set.
+This changed to creating "functions", or sets of mappings.
+
+    m2.a.    cat' { <fluff true> <puff true> 
+                    <sherman true> <mary false> }
+
+    (m2.a) is an example of how the model is currently
+represented.  The set "cat'" has mappings from entities to
+values.  Actually it is from lists to values.  The last item
+in the list is the mapped-to-item from the list of all but
+the last item.  ("<fluff>" maps to "true", and "<mary>" maps
+to "false".)  If a mapping cannot be found then the value is
+"nil". 
+
+    There are two advantages to this representation.  One is
+that we can model eating events with a set like this (m3.a).
+
+    m3.a.    eat' { <bob { <carrot-1 true> <potato-2 true> }>
+                    <bill { <carrot-2 true> }> }
+
+    Here we have "<bob>" mapping to a function that maps
+"<carrot-1>" to "true" and "<potato-2>" to "true".  (i3.a)
+is a function which maps to functions.  The other advantage
+is that we can have a partial model.  For instance, given
+the predicate (m2.a), the value of (m4.a) is neither "true"
+nor "false".
+
+    m4.a.    (cat' spot)
+
+    The value of (m4.a) is "nil", which is used to denote
+"unknown".
+
+    I chose to make the parser a recursive-descent parser
+because I wanted to be able to input a grammar, not have it
+hard-coded in the program.  I knew that a table driven
+recursive-descent parser was possible for me to do.  At this
+point I am curious as to how a bottom-up parser would have
+worked.
+
+    Also, since I planned to assume that any input sentence
+would be grammatical, and that the input would be simple
+sentences (relatively speaking) I didn't worry about doing
+complex grammatical verification.  The grammar that I am
+currently using has no information about subject-verb
+agreement, for example.
+
+    A drawback of the current parser is that it cannot match
+null items in the input string.  This has to be considered
+when creating a grammar for the program to use, and makes
+creating  grammar with unbounded movements difficult.
+
+    This limitation is the basis of the programs ability to
+deal with left recursion.  Since null items may not be
+matched every branch in the tree must match at least one
+word in the input sentence.  A count is kept of how many
+words of the input a branch may match.  As the number of
+branches increases, the number of words that each branch may
+match decreases.  When the number of words available for a
+branch reaches zero, that branch is aborted.
+
+    The main points of this paper are the discussion of the
+parser, the evaluator, and the translator which appear in
+that order.  Before we begin that, there will be a brief
+description of the Idol programming language.  At the end is
+a section describing how to use Myshkin.  The source code of
+the program is included at the end.
+

@@ -1,0 +1,133 @@
+
+
+
+ 1  parse("s", "george sighed.")
+ 2  |  p_subject := ["george", "sighed", "."]
+ 3  |  p_pos := 1
+ 4  |  rd_parse("s", 3)
+ 5  |  |  "s" expands to ["name", "verb", "."]
+ 6  |  |  rd_parse(["name", "verb", "."], 3)
+ 7  |  |  |  rd_parse("name", 1)
+ 8  |  |  |  |  "name" has no expansion
+ 9  |  |  |  |  parse_match("name")
+10  |  |  |  |  |  p_subject[p_pos] is "george"
+11  |  |  |  |  |  p_pos +:= 1  (i.e. p_pos increments to 2)
+12  |  |  |  |  |  lexicon$lookup("george") produces [word("name","george","g")]
+13  |  |  |  |  parse_match suspend p_tree("g", "name", "george")
+14  |  |  |  rd_parse suspend p_tree("g", "name", "george")
+15  |  |  |  rd_parse(["verb", "."], 2)
+16  |  |  |  |  rd_parse("verb", 1)
+17  |  |  |  |  |  "verb" has no expansion
+18  |  |  |  |  |  parse_match("verb")
+19  |  |  |  |  |  |  p_subject[p_pos] is "sighed"
+20  |  |  |  |  |  |  p_pos +:= 1 (increment to 3)
+21  |  |  |  |  |  |  lexicon$lookup("sighed") produces [word("verb", "sighed", "sigh'")]
+22  |  |  |  |  |  parse_match suspend p_tree("sigh'", "verb", ["sighed"])
+23  |  |  |  |  rd_parse suspend p_tree("sigh'", "verb", ["sighed"])
+24  |  |  |  |  rd_parse(["."], 1)
+25  |  |  |  |  |  rd_parse(".", 1)
+26  |  |  |  |  |  |  "." has no expansion
+27  |  |  |  |  |  |  parse_match(".")
+28  |  |  |  |  |  |  |  p_subject[p_pos] is "."
+29  |  |  |  |  |  |  |  p_pos +:= 1 (increment to 4)
+30  |  |  |  |  |  |  |  lexicon$lookup(".") fails
+31  |  |  |  |  |  |  parse_match suspend p_tree( "", ".", ["."] )
+32  |  |  |  |  |  rd_parse suspend p_tree( "", ".", ["."] )
+33  |  |  |  |  rd_parse suspend [p_tree( "", ".", ["."] )]
+34  |  |  |  rd_parse suspend [p_tree("sigh'", "verb", ["sighed"]), p_tree( "", ".", ["."] )]
+35  |  |  rd_parse suspend [p_tree("g", "name", "george"), p_tree("sigh'", "verb", ["sighed"]), p_tree( "", ".", ["."] )]
+36  |  rd_parse suspend p_tree( ["(","2","1",")"], "s", 
+37  |                            [p_tree("g", "name", "george"), 
+38  |                             p_tree("sigh'", "verb", ["sighed"]), 
+39  |                             p_tree( "", ".", ["."] )])
+40  |  p_pos is larger than the length of p_subject
+41  parse suspend p_tree( ["(","2","1",")"], "s", 
+42                         [p_tree("g", "name", "george"), 
+43                          p_tree("sigh'", "verb", ["sighed"]), 
+44                          p_tree( "", ".", ["."] )])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 69 -                           
+
+
+
+45  parse resumes
+46  |  rd_parse 4 resumes
+47  |  |  rd_parse 6 resumes
+48  |  |  |  rd_parse 15 resumes
+49  |  |  |  |  rd_parse 24 resumes
+50  |  |  |  |  |  rd_parse 25 resumes
+51  |  |  |  |  |  |  parse_match 27 resumes
+52  |  |  |  |  |  |  |  p_pos -:= 1 (decrement to 3)
+53  |  |  |  |  |  |  parse_match fails
+54  |  |  |  |  |  rd_parse fails
+55  |  |  |  |  rd_parse fails
+56  |  |  |  |  rd_parse 16 resumes
+57  |  |  |  |  |  parse_match 18 resumes
+58  |  |  |  |  |  |  no more word structures for "sighed"
+59  |  |  |  |  |  |  p_pos -:= 1 (decrement to 2)
+60  |  |  |  |  |  parse_match fails
+61  |  |  |  |  rd_parse fails
+62  |  |  |  rd_parse fails
+63  |  |  |  rd_parse 7 resumes
+64  |  |  |  |  parse_match 9 resumes
+65  |  |  |  |  |  no more word structures for "george"
+66  |  |  |  |  |  p_pos -:= 1 (decrement to 1)
+67  |  |  |  |  parse_match fails
+68  |  |  |  rd_parse fails
+69  |  |  rd_parse fails
+70  |  |  "s" expands to ["name", "verb", "name", "."]
+71  |  |  rd_parse( "name", 0 )
+72  |  |  |  second parameter is less than 1 so fail
+73  |  |  rd_parse fails
+74  |  |  "s" has no more expansions
+75  |  |  parse_match("s")
+76  |  |  |  p_subject[p_pos] is "george"
+77  |  |  |  p_pos +:= 1 (increment to 2)
+78  |  |  |  lexicon$lookup("george") produces [word("name","george","g")]
+79  |  |  |  "name" does not equal "s" so does not produce tree
+80  |  |  |  no more word structures for "george"
+81  |  |  |  p_pos -:= 1 (decrement to 1)
+82  |  |  parse_match fails
+83  |  rd_parse fails
+84  parse fails
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           - 70 -                           
+
+

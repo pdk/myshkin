@@ -1,0 +1,28 @@
+Myshkin:  A Computer Program for Evaluating 
+          the At-Issue Entailments of English Sentences
+
+by Patrick Kelly
+
+                --- Statement of Project Purpose ---
+
+      The purpose of this project was to implement a
+computer program based on linguistic theories of syntax and
+semantics.  The program translates English sentences into
+logical formulas which are evaluated with respect to a model
+to determine if they are true, false, or undeterminable
+statements.
+
+      The program works in three parts: a parser, a
+translator, and an evaluator.  The parser component
+determines the structure of each input sentence based on
+formal rules of grammar and a dictionary.  The translator
+takes these structures from the parser and with translation
+rules creates statements of mathematical logic.  The
+evaluator component then evaluates the logical statements
+with respect to the model to determine if the statement is
+true, false, or unknown.  The model holds facts about the
+world represented by sets and vectors.
+
+      This work is based on theories presented in upper-
+division linguistics courses.
+

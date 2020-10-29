@@ -1,0 +1,746 @@
+    5.0  __The Translator__
+
+    First we will look at the two basic operation for
+composing translations.  We will describe the semantic
+composition methods in regard to a simple grammar.  Then we
+will look at quantifiers and storage.  Verb phrases,
+passives, topicalization will follow.  Finally we will
+revisit quantifiers and storage with a discussion of
+relative clauses.
+
+    The translator works on p_trees created by the parser.
+The p_trees contain, as said before, the translation rules.
+The translator simply traverses the tree building
+translations for each node based on the translation rule at
+each node.
+
+    The translation of a node is built from the translations
+of its children.  The translations of children are included
+by numerical reference. To put the translation of the nth
+child of a node in the translation, the number n is put in
+the translation rule.  For instance, with the composition
+rule (t1.a)
+
+    t1.a.   ( 2 1 )
+
+ the translation is two parentheses surrounding the
+translation of the second child followed by the translation
+of the first child.
+
+    Another method for combining translations is with gamma
+functions. Gamma functions are similar to lambda
+abstractions in lambda calculus.
+
+    t2.a.    (gamma var (... var ...))
+       b.    ( (gamma var (... var ...))  exp )
+       c.    (... exp ...)
+
+    A gamma function is the form shown in (12.a).  When a
+gamma function is applied to an argument, as shown in (t2.b)
+it is reduced.  (t2.b) reduces to (t2.c).  The result of
+applying a gamma function to an expression is the second
+argument of the gamma with all instances of the first
+argument of the gamma replaced by the expression.
+
+    The difference between gamma functions and lambda
+functions is that only symbols which are the second item in
+a list where gamma is the first are considered to be
+variables.  Variable collisions are not avoided unless the
+variable appears in this position.  For instance, (t3.a) is
+reduced to (t3.b), but (t4.a) is reduced to (something like)
+(t4.b).
+
+    t3.a.    ((gamma x (equal y x)) y)
+       b.    (equal y y)
+    
+    t4.a.    ((gamma x (gamma y (y x)) y)
+       b.    (gamma y-2 (y-2 y))
+
+    In (t4.a-b) the "y"s in "(gamma y (y x))" are made
+unique to avoid variable collision.  This happens because
+"y" is bound by gamma.  In (t3.a) the "y" is not bound by a
+gamma and is not made unique.  When we discuss bringing
+quantifiers out of storage we will re-examine this.
+
+    5.1  __Basic Grammar and Translations__
+
+    To get a more comprehensive view of how translations are
+built we will examine (t5), a small portion of the grammar,
+(t6), a short lexicon, and (t7.a), the p_tree of "Jay kissed
+Mary."
+
+    t5.a.   sp    -> s .       => 1
+       b.   s     -> np vp     => (2 1)
+       c.   np    -> name      => 1
+       d.   vp    -> v2 np     => (gamma x (1 x 2))
+    
+    t6.a.   name: jay j; mary m
+       b.   v2:   kissed kiss'
+    
+    t7.a.  Jay kissed Mary.   t4.b.   Jay kissed Mary.
+           sp                                    sp
+           1                                 (kiss' j m)
+       ____|_____                             ____|_____     
+       |        |                             |        |     
+       s        .                             s        .
+    (2 1)       |           ((gamma x(kiss' x m)) j)   |
+ ______|______  .                       ______|______  .     
+ |           |                          |           |        
+ np          vp                         np          vp       
+ 1   (gamma x(1 x 2))                   j  (gamma x(kiss' x m))
+ |        ___|____                      |        ___|____    
+name      |      |                     name      |      |    
+ j        v2     np                     j        v2     np   
+ |       kiss'   1                      |       kiss'   m    
+jay       |      |                     jay       |      |    
+        kissed  name                           kissed  name  
+                 m                                      m    
+                 |                                      |    
+                mary                                   mary  
+
+    The p_tree (t7.a) on the left shows what is produced by
+the parser.  The tree (t7.b) on the right illustrates how
+the translation is built.
+
+    At the lexical category nodes, the translation rules are
+the semantic values of the lexical items found in the input
+sentence.  The two "name" nodes have the translations "j"
+and "m" corresponding to "jay" and "mary".  The "v2" node
+has the translation "kiss'", which is the semantic value of
+"kissed".
+
+    Consider the translation rule shown in (t5.d) and for
+the "vp" node in (t7.a).  This rule says that the
+translation of the "vp" node is a gamma function built from
+the translations of the first and second children of the
+"vp" node.  The "1" is replaced with "kiss'" (the
+translation of the "v2" node) and the "2" is replaced with
+"m" (the translation of the "np" "mary").  The translation
+is shown in (t7.b).
+
+    The translation of the "s" node is determined by the
+translation rule in (t5.b) and shown in (t7.a).  It is made
+by building an expression that applies the translation of
+the second child (the "vp" node) to the translation of the
+first child (the "np" node).  The "2" is replaced with the
+translation of the "vp" and the "1" is replaced with the
+translation of the "np".  The result is shown in (t7.b).
+
+    After gamma reduction we get the expression formed by
+replacing the "x" (the first argument of the gamma) with "j"
+(the argument to the gamma function) in the second argument
+of the gamma.  The result of that reduction is show as the
+translation of the "sp" node in the right tree.
+
+    The translation of the input sentence is the expression
+(t8.a).
+
+    t8.a.   (kiss' j m)
+
+    5.2 __Noun Phrases, Quantifiers and Storage__
+
+    The translator also handles quantifier storage and
+quantifying in.  Here I will only explain how the first
+version of the translator worked in this regard.  Later,
+during discussion of relative clauses I will examine the
+faults with the first version, and how the current version
+works.
+
+    There are a few issues involved with handling
+quantifiers and their storage.  A new variable (of the
+evaluator's type) needs to be created when constructing a
+new quantifier.  There needs to be a way to put the variable
+into the quantifier expression.  There needs to be a place
+to put the quantifier until it is quantified in.  (t9.a) is
+a rule which triggers these actions.
+    
+    t9.a.   np -> det n-bar => ! 1 (gamma x (1 &var (2 &var) x))
+       b.   n-bar -> adj n-bar => (gamma x (and (1 x) (2 x)))
+       c.   n-bar -> n         => (gamma x (1 x))
+
+    I use an exclamation mark as the first item in a
+translation rule to signal the translator that the
+expression being constructed should be stored as a
+quantifier.  When the translator sees the "!" it creates a
+new evaluator-type variable and gets the translation of the
+second item in the translation rule as the name of the
+quantifier.  Any instance of the word "&var" in the
+translation rule is replaced by the newly created variable
+during the normal building of the translation.  Once the
+translation is built the expression is put into a globally
+accessible list for storage, and the variable created is
+used as the translation of the node.
+
+    Consider the p_tree (t10.a) which uses rules (t9.a,c).
+
+    t10.a.  Every cat ate a rat.
+                                      sp
+                                      1
+                              ________|________
+                              |               |
+                              s               .
+                           (2 1)              |
+                 _____________|_____________  .
+                 |                         |
+                 np                        vp
+! 1(gamma x(1 &var(2 &var)x))    (gamma x(1 x 2))
+           ______|______        ___________|___________
+           |           |        |                     |
+          det        n-bar      v2                    np
+           A  (gamma x(1 x))  eat'  ! 1(gamma x(1 &var(2 &var)x))
+           |           |        |               ______|______
+         every         n       ate              |           |
+                      cat'                     det        n-bar
+                       |                        E  (gamma x(1 x))
+                      cat                       |           |
+                                                a           n
+                                                           rat'
+                                                            |
+                                                           rat
+
+    We will examine how the translation of the "a rat"
+constituent is built.  When the "!" is found a new variable
+is created, ".b", and the translation of the first child,
+the "det" node, is fetched as the name of the quantifier.
+"E" is the name.  The rest of the translation is built from
+the translations of the two children.  Again, the
+translation of the first child is "E".  The translation of
+the "n-bar" node is (t11.a).  Building the translation of the
+"np" node we get (t11.b), which gamma reduces to (t11.c).
+
+    t11.a.  (gamma x(rat' x))
+        b.  (gamma x (E .b ((gamma y (rat' y)) .b) x))
+        c.  (gamma x (E .b (rat' .b) x))
+
+    The gamma function (t11.c) is put in storage and the
+translation of this "np" node is the variable ".b".  Doing
+the translation of the whole tree results in (t12.a-c).
+
+    t12.a.  (ate' .a .b)
+        b.  (gamma x (A .a (cat' .a) x))
+        c.  (gamma x (E .b (rat' .b) x))
+
+    (t12.a) is the translation of the "sp" node.  (t12.b-c)
+are in storage.
+
+    The operation of quantifying in is done by using the
+gamma functions which are in storage applied to the
+translation of the top node.  For example, applying (t12.b)
+to (t12.a) we get (t13.a) which reduces to (t13.b).
+Applying (t12.c) to (t13.b) we get, after reduction,
+(t13.c).
+
+    t13.a.  ( (gamma x (A .a (cat' .a) x)) (ate' .a .b) )
+    
+        b.  (A .a (cat' .a) (ate' .a .b))
+            "for all 'a', such that 'a' is a 'cat', 'a' ate 'b'"
+    
+        c.  (E .b (rat' .b) (A .a (cat' .a) (ate' .a .b)))
+            "there exists 'b', such that 'b' is a 'rat', where 
+             for all 'a', such that 'a' is a 'cat', 'a' ate 'b'"
+
+    Here we should stop a moment and reconsider the
+difference between gamma reductions and lambda reductions.
+Consider the reduction from (t13.a) to (t13.b).  If this were
+a lambda reduction instead of a gamma reduction the variable
+".a" (which appears within the argument of the gamma
+function) would be altered in the argument of the gamma to
+avoid a variable collision since ".a" is bound by the
+universal quantifier ("A").  That is, the lambda application
+(t14.a) is reduced to (t14.b), where the ".a" has been
+changed to avoid a variable collision.
+    
+    t14.a.   ( (lambda x (A .a (cat' .a) x)) (ate' .a .b) )
+        b.   (A .z (cat' .z) (ate' .a .b))
+    
+    In gamma reductions the only items checked for variable
+collision are the items which are bound by a gamma.  This is
+crucial to building translations, as can be seen in
+(t13.a-c).
+
+    Taking the two gamma functions (t12.b-c) out of storage
+and applying them in the other order results in the other
+reading of the input sentence "Every cat ate a rat." shown
+in (t15.a).
+
+    t15.a.  (A .a (cat' .a) (E .b (rat' .b) (ate .a .b)))
+            "for all 'a', such that 'a' is a 'cat', where 
+            there exists 'b', such that 'b' is a 'rat', 
+            'a' ate 'b'"
+
+    The quantifying in is handled by a permutation function
+which generates the expressions formed by applying the items
+in storage as I've just shown.  The function does this in
+every possible order.
+
+    5.3  __Verb Phrases__
+
+    The basic verb phrase grammar rules are shown in (t16),
+and the basic prepositional phrase rule is shown in (t17.a).
+
+    t16.a.  vp -> v1       => (gamma x (1 x))
+        b.  vp -> v2 np    => (gamma x (1 x 2))
+        c.  vp -> v3 np pp => (gamma x (1 x 2 3))
+    
+    t17.a.  pp -> p np     => 2
+
+    In (t16.b-c) the direct object becomes the second
+argument a predicate.  In (t16.c) the indirect object
+becomes the third argument.  (t18.b) is the translation of
+(t18.a), and similarly (t19.b) of (t19.a).
+
+    t18.a.  hit mary
+        b.  (gamma x (hit' x m))
+    
+    t19.a.  give fluff to mary
+        b.  (gamma x (give' x f m))
+    
+    Consider (t20.a-b).
+    
+    t20.a.  Mary threw a ball to George.
+        b.  Mary threw a ball.
+    
+    In (t20.b) the indirect object has been omitted.  This
+construction is handled by rule (t21.a).
+
+    t21.a.  vp -> v3 np => (gamma x (1 x 2 ?))
+
+    The individual indeterminant takes the place of the
+missing indirect object.
+
+    Consider (t22.a).
+
+    t22.a.  Mary threw George a ball.
+
+    This is the form of (t20.a) after dative movement.  This
+is handled by (t23.a).
+
+    t23.a.  vp -> v3 np np => (gamma x (1 x 3 2))
+
+    Comparing (t23.a) to (t16.c) you will see that the roles
+of the second and third children of the "vp" node have been
+switched.  This is in accord with the change from (t20.a) to
+(t22.a). 
+
+    5.4  __Passives__
+
+    Consider (t24).
+
+    t24.a.  Mary was kissed by George.
+        b.  Mary was kissed.
+        c.  A ball was thrown to Mary by George.
+        d.  A ball was thrown by George to Mary.
+        e.  A ball was thrown to Mary.
+        f.  A ball was thrown by George.
+        g.  A ball was thrown.
+        h.  Mary was thrown a ball.
+        i.  Mary was thrown a ball by George.
+
+    The examples in (t24) are passive forms of what the
+grammar shown so far allows.  These forms are handled by the
+rules in (t25-26).  The rule (t26.a) corresponds to the
+structure of (t24.a), (t26.b) to (t24.b), (t26.c) to
+(t24.c), etc.
+
+    t25.a.  vp -> aux-be vp-pass => 2
+    
+    t26.a.  vp-pass -> v2 byp    => (gamma x (1 2 x))
+        b.  vp-pass -> v2        => (gamma x (1 ? x))
+        c.  vp-pass -> v3 pp byp => (gamma x (1 3 x 2))
+        d.  vp-pass -> v3 byp pp => (gamma x (1 2 x 3))
+        e.  vp-pass -> v3 pp     => (gamma x (1 ? x 2))
+        f.  vp-pass -> v3 byp    => (gamma x (1 2 x ?))
+        g.  vp-pass -> v3        => (gamma x (1 ? x ?))
+        h.  vp-pass -> v3 np byp => (gamma x (1 3 2 x))
+        i.  vp-pass -> v3 np     => (gamma x (1 ? 2 x))
+    
+    In (a-g) the direct object has been moved to subject
+position.  This is shown in the rules (t26.a-g) where the
+variable of the gamma is in the second argument position.
+In (h-i) the indirect object has moved to the subject
+position after dative movement.  In (t26.h-i) the role of
+the subject is that of the role of an indirect object in the
+normal form.  If a by-phrase ("byp") is present then its
+translation takes the role that the subject would have in
+the un-passivized form.  See (t26.a,c,d,f,h).  If the
+by-phrase is not present then the individual indeterminate
+takes that role.  See (t26.b,e,g,i).  Where the indirect
+object has been omitted the individual indeterminate takes
+that position.  See (t26.f-g).
+
+    5.5  __Topicalization__
+
+    Consider (t27).
+
+    t27.a.  George, Mary saw.
+        b.  A rat, some duck chased.
+
+    (t27.a,b) are two examples of topicalized sentences.
+Some "np" has been moved to the front of the sentence.
+There are two things to deal with in these cases: where did
+the "np" come from, and how do we get the translation of the
+"np" at the front into the position dictated by where the
+hole is?  These are objectives are met with "/np"
+categories, as in Generalized Phrase Structure Grammar. [3]
+
+    Besides creating the rule for the top of the structure,
+we make two types of changes to the rules we have to
+implement this.  The first is to create versions of all the
+rules that "pass along" the "/np".  That is we make rules
+such that if the left-hand side has a "/np" we put a "/np"
+on one of the symbols in the right-hand side.  This change
+allows trees to have chains of "/np" provided there is a
+rule for the top of the chain and a rule for the bottom of
+the chain.  The second change entails making new rules that
+produce gamma functions to put the extracted "np" back in
+its semantic place.
+
+    First we have the topicalization rule (t28.a).
+
+    t28.a.  s -> np , np vp/np => ( (4 3) 1 )
+
+    This is the top of the "/np" chain.  Here we presume
+that the "vp/np" will produce a gamma function that when
+applied to an argument (the subject) and reduced will
+produce a gamma function which we can apply to the
+topicalized "np".
+
+    Shown in (t29) are the rules for phrases where an "np"
+has been extracted.
+
+t29.a.  s/np -> vp => 1
+    b.  vp/np -> v2          => (gamma y (gamma x (1 y x)))
+    c.  vp/np -> v3 np pp/np => (gamma y (gamma x (1 y 2 x)))
+    d.  vp/np -> v3 pp       => (gamma y (gamma x (1 y x 2)))
+    e.  vp/np -> v3          => (gamma y (gamma x (1 y x ?)))
+    f.  vp/np -> v3 np       => (gamma y (gamma x (1 y 2 x)))
+    g.  vp-pass/np -> v2 byp/np    => (gamma y (gamma x (1 x y)))
+    h.  vp-pass/np -> v3 byp/np    => (gamma y (gamma x (1 x y)))
+    i.  vp-pass/np -> v3 pp/np     => (gamma y (gamma x (1 ? y x)))
+    j.  vp-pass/np -> v3 pp/np byp => (gamma y (gamma x (1 3 y x)))
+    k.  vp-pass/np -> v3 pp byp/np => (gamma y (gamma x (1 x y 2)))
+    l.  vp-pass/np -> v3 byp/np pp => (gamma y (gamma x (1 x y 3)))
+    m.  vp-pass/np -> v3 byp pp/np => (gamma y (gamma x (1 2 y x)))
+    n.  vp-pass/np -> v3 byp       => (gamma y (gamma x (1 2 x y)))
+    o.  vp-pass/np -> v3           => (gamma y (gamma x (1 ? x y)))
+    p.  vp-pass/np -> v3 np byp/np => (gamma y (gamma x (1 x 2 y)))
+
+
+    The rules in (t29) are possibilities for the bottom of
+the chain.  They have translations which are gamma functions
+that when applied to an argument produce gamma functions.
+The outer gammas will do the work of the gammas in the
+original rules, that is place the translation of the subject
+of the clause.  The inner gammas are the new ones.  These
+place a translation in the place from which an "np" was
+taken.  The exception is (t29.a).  This rule just passes on
+the gamma function from the "vp" instead on applying it to
+the subject (which is absent in this rule).
+
+    (t30) shows a couple of support rules for (t29).
+
+t30.a.  pp/np  -> p  =>
+    b.  byp/np -> by =>
+
+    The translations of the rules in (t30) are null and are
+never called upon by any rule in (t29).
+
+    We have the rules which create chains of "/np" in (t31).
+
+t31.a.  s/np     -> np/np vp     => (gamma a (2 (1 a)))
+    b.  s/np     -> np vp/np     => (2 1)
+    c.  vp/np    -> v2 np/np     => (gamma x (gamma a (1 x (2 a))))
+    d.  vp/np    -> v3 np/np pp  => (gamma x (gamma a (1 x (2 a) 3))
+    e.  vp/np    -> v3 np/np     => (gamma x (gamma a (1 x (2 a) ?))
+    f.  vp/np    -> v3 np/np np  => (gamma x (gamma a (1 x 3 (2 a)))
+    g.  vp/np    -> v3 np np/np  => (gamma x (gamma a (1 x (3 a) 2))
+    h.  vp/np    -> aux-be vp-pass/np => 2
+    i.  vp-pass/np -> v3 np/np byp => (gamma x (gamma a (1 3 (2 a) x))
+    j.  vp-pass/np -> v3 np/np     => (gamma x (gamma a (1 ? (2 a) x))
+
+    In these rules the "/np" is passed to a lower
+constituent.  The translation of these constituents will be
+gamma functions ready to place the extracted "np".  When the
+"/np" is passed to an noun phrase, to insure that the gamma
+functions produced are not stranded within the new
+expression, they are fed a new variable and that variable is
+used to make a new gamma function.  [These have not been
+tested.]  A verb phrase passed a "/np" will produce a gamma
+function that produces a gamma function.  These translations
+do not need to be re-abstracted.
+
+    (t32.b) is an example p_tree of the topicalized sentence
+(t32.a).  (t33.b) is a tree which illustrates how the
+translation is built in (t32.b).  The translation of
+(t32.a), with the quantifier brought in, is shown in
+(t34.a).
+
+
+    t32.a.  Mary, George threw a cat to.
+        b.                   sp
+                             1
+                    _________|__________
+                    |                  |
+                    s                  .
+               ((4 3)1)                |
+     _______________|________________  .
+     |   |  |                       |
+     np  ,  np                    vp/np
+     1   |  1       (gamma y(gamma x(1 y 2 x)))
+     |   ,  |     __________________|___________________
+    name   name   |                     |              |
+     m      g     v3                    np           pp/np
+     |      |   throw'  ! 1(gamma x(1 &var(2 &var)x))  |
+    mary  george  |                _____|______        p
+                threw              |          |       to'
+                                  det       n-bar      |
+                                   E  (gamma x(1 x))   to
+                                   |          |
+                                   a          n
+                                             cat'
+                                              |
+                                             cat
+    
+    t33.a.  Mary, George threw a cat to.
+        b.                   sp
+                        (throw' g .a m)   
+                    _________|_____________________
+                    |                             |
+                    s                             .
+    (((gamma y(gamma x(throw' y .a x))) g) m)     |
+     _______________|________________             .
+     |   |  |                       |
+     np  ,  np                    vp/np
+     1   |  1       (gamma y(gamma x(throw' y .a x)))
+     |   ,  |     __________________|___________________
+    name   name   |                     |              |
+     m      g     v3                    np           pp/np
+     |      |   throw'   ! E(gamma x(E .a (cat' .a)x)) |
+    mary  george  |                _____|______        p
+                threw              |          |       to'
+                                  det       n-bar      |
+                                   E (gamma x(cat' x)) to
+                                   |          |
+                                   a          n
+                                             cat'
+                                              |
+                                             cat
+
+    t34.a.  (E .a (cat' .a) (throw' g .a m)) 
+
+    The translation of the "np" "a cat" results in a
+variable, ".a", and the gamma function (t35.a) in storage.
+
+    t35.a.  (gamma x (E .a (cat' .a) x))
+
+    The translation of the "vp/np" node is (t36.a).  The
+translation of the "s" node is made by applying this, first,
+to the translation of the third child of the "s" node (i.e.
+the subject), and then the result of that is applied to the
+translation of the first child (i.e. the topicalized "np").
+This is the expression (t36.b).  This reduces to (t36.c).
+
+    t36.a.  (gamma y (gamma x (throw' y .a x)))
+        b.  (((gamma y (gamma x (throw' y .a x))) g) m)
+        c.  (throw' g .a m)
+    
+    This account needs to be extended to deal with embedded
+sentences.
+
+    5.6 __Relative Clauses and Storage__
+
+    At the beginning of this discussion of the translator
+and the grammar, you will recall, I mentioned that what was
+described there was the first version of the translator.
+That system could not properly handle issues introduced by
+relative clause constructions.
+
+    At first the quantifier storage was a globally
+accessable list and quantifying in took place only as the
+last step in the translation.  This changed to a system that
+includes the items in storage as a separate part of the
+translation, and the ability to do quantification at
+specified nodes.
+
+    The last alteration was to be able to specify nodes
+where there can be nothing in storage.
+
+    To account for relative clauses requires the addition of
+two rules in the grammar.  They are shown in (t34).
+
+t37.a.  n-bar    -> n-bar compp/np => (gamma x (and (1 x) (2 x)))
+    b.  compp/np -> comp s/np   => 2
+
+    Consider (38).
+
+    t38.a.  Every cat that ate a rat died.
+        b.                        sp
+                                  1
+                           _______|________
+                           |              |
+                           s              .
+                        (2 1)             |
+                ___________|____________  .
+                |                      |
+                np                     vp
+! 1(gamma x(1 &var(2 &var)x))  (gamma x(1 x))
+       _________|_________             |
+       |                 |             v1
+      det              n-bar          die'
+       A  (gamma x(and(1 x)(2 x)))     |
+       |           ______|______      died
+     every         |           |
+                 n-bar      compp/np
+           (gamma x(1 x))      2
+                   |     ______|______
+                   n     |           |
+                  cat'  comp        s/np
+                   |    that'        1
+                  cat    |           |
+                        that         vp
+                            (gamma x(1 x 2))
+                           __________|___________
+                           |                    |
+                           v2                   np
+                          eat'  ! 1(gamma x(1 &var(2 &var)x))
+                           |               _____|______
+                          ate              |          |
+                                          det       n-bar
+                                           E  (gamma x(1 x))
+                                           |          |
+                                           a          n
+                                                     rat'
+                                                      |
+                                                     rat
+
+    With the first version of the translator we get the two
+translations (t39.a,b).
+    
+t39.a.  (E .f (rat' .f) (A .e (and (cat' .e) (eat' .e .f)) (die' .e)))
+    b.  (A .e (and (cat' .e) (eat' .e .f)) (E .f (rat' .f) (die' .e))) 
+    
+    In translation (t39.a) "a rat" has wider scope than
+"every cat".  "a rat" is within the relative clause of
+"every cat", "every cat that ate a rat".  It says that there
+is some particular rat such that for every cat that ate it
+the cat died.  This is not the prefered reading.
+
+    In translation (t39.b) we have different problem.  The
+variable ".f" in the expression with the "eat'" predicate is
+out of the scope of its quantifier ("(E .f (rat' .f)...").
+This is an expression error and will be found in the
+evaluation of the expression.
+
+    Neither of these translations is the one we want.  The
+correct translation of this sentence is (t40.a).
+
+t40.a.  (A .e (and (cat' .e) (E .f (rat' .f) (eat' .e .f))) (die' .e))
+
+    The reason that this was not produced as a translation
+is that the existential quantifier is within the restriction
+of the universal quantifier.  The way to do this is to allow
+the existential quantifier (in this case) to be part of the
+translation when the universal quantifier is built.  The
+quantifier of a relative clause needs to have the oportunity
+to be quantified in at or below the "n-bar" node of the
+relative clause.  Then it may become part of the restriction
+of the upper quantifier.
+
+    To do this sort of thing I added a place to keep a set
+of the categories where quantification will occur.  Because
+of this change the storage could no longer be globally
+accessable, it needed to be part of the translation.  We
+don't want to bring in a quantifier at a node that does not
+dominate the node where the quantifier was created.  The
+translator now generates lists, where the first item is the
+translation and the rest of the list is the things that are
+in storage.
+
+    Because of this change any node may have multiple
+translations.  At any point there may be translations with
+things in storage as well as translations with quantifiers
+brought in.  In this program the nodes where quantifying in
+can take place are called cooper-nodes. [4][5]
+
+    Setting the cooper-node set to include "s" and "s/np"
+nodes we get these three translations:
+
+t41.a.  (E .d (rat' .d) (A .c (& (cat' .c) (eat' .c .d)) (die' .c))) 
+    b.  (A .c (& (cat' .c) (eat' .c .d)) (E .d (rat' .d) (die' .c))) 
+    c.  (A .c (& (cat' .c) ((E .d (rat' .d) 
+             (gamma x (eat' x .d))) .c)) (die' .c))
+
+    (t41.a-b) are the same as (t40.a-b) and the same
+complaints still hold against them.  The new translation
+(t41.c) also has a problem.  There is a gamma function which
+is irreducible.  It is the result of bringing in the lower
+quantifier at the "s/np" node as we directed.
+
+    t42.a.  (gamma x (E .d (rat' .d) x))
+        b.  (gamma x (ate' x .d))
+
+    At the "s/np" node (t42.a) is in storage and (t42.b) is
+the translation of the "vp" node beneath it.  Since "s/np"
+is a cooper-node the permutation function is called.  One
+translation is generated with (t42.a) left is storage to be
+brought in later.  Another is to apply the quantifier to the
+translation (t42.b) of the "vp" node.  We have (t43.a) as a
+result, which reduces to (t43.b).
+
+t43.a.  ( (gamma y (E .d (rat' .d) y)) (gamma x (ate' x .d)) )
+    b.  (E .d (rat' .d) (gamma x (ate' x .d)))
+
+ (t43.b) is used as a translation for the "s/np" node.  The
+problem is that when the quantifier is applied it is applied
+not to an expression, as is was at the top of the tree, but
+to a gamma function.
+
+    My solution is to find the expression within the gamma
+function, apply the quantifier to that and then re-build the
+gamma function.  This is done very simply.  When the
+permutation function is called to bring in quantifiers it
+checks to see if what it is applying the quantifier to is a
+gamma function.  If it is, it takes the gamma off and calls
+itself again with the second argument of the gamma.  With
+each thing that the recursively called permutation procedure
+generates the gamma function is rebuilt and generated as a
+translation.  The result is that the gammas are stripped
+off, the quantifier is applied to the expression inside, and
+then the gammas are put back on.  The preserves the type of
+the translation while the quantifiers are brought in.
+
+    Now, with this alteration we get three translations,
+shown in (t44).
+
+t44.a.  (E .f (rat' .f) (A .e (& (cat' .e) (eat' .e .f)) (die' .e)))
+    b.  (A .e (& (cat' .e) (eat' .e .f)) (E .f (rat' .f) (die' .e))) 
+    c.  (A .e (& (cat' .e) (E .f (rat' .f) (eat' .e .f))) (die' .e)) 
+
+    Again, the first two (t44.a-b) are wrong.  The third is
+the correct translation of the sentence.  The lower
+quantifier is within the restricion of the higher and all
+the gammas are reduced.
+
+    Now the third change.  The fact that (t44.b) has a
+variable out of the scope of its quantifier will be handled
+by the evaluator.  We don't need to worry about that.  But
+(t44.a) is a valid expression, but is not a reading we want
+for the sentence.  The lower quantifier from the relative
+clause has wider scope than the higher quantifier.  This
+happens when the lower quantifier is left in storage and the
+permute function permutes it past the higher quantifier.
+This is fixed by having a list of nodes where a translation
+which has something in storage is ruled invalid.  All the
+quantifiers must have been brought out of storage at these
+nodes to be a valid translation.
+
+    With this final version the translation we get for
+(t38.a) is (t45.a).
+
+t45.a.  (A .i (& (cat' .i) (E .j (rat' .j) (eat' .i .j))) (die' .i)) 
+
+    Here we have the correct translation, and not the one
+with the wide scope for the existential.  An added bonus of
+the restriction is that the translation with the out-of-scope 
+variable is no longer produced.
+
